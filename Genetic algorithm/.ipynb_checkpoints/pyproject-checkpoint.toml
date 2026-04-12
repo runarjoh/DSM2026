@@ -1,0 +1,17 @@
+[project]
+name = "dsm-genetic-algorithm"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib",
+    "requests",
+    "seaborn",
+    "numpy",
+    "pandas",
+    "bokeh",
+    "deap==1.4.2",
+    "numba",
+    "scoop",
+    "ipykernel",
+    "jupyterlab",
+]

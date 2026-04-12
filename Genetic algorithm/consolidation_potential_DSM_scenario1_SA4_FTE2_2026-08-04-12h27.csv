@@ -1,0 +1,32 @@
+﻿Func,Sub-unit,MRE,MRE,MRE,MSIC,MAU,MAU,MAU,ME,ME,SME,SME,SME,MRE,MSIC,SME,PMS,PMS,PMS,MRE,PMS,PMS,PMS,MSIC,PMS,PMS,PMS,PMS,PMS,PMS,SME
+,,Clinical Research Division,Clinical Strategy Division,Clinical Strategy Group,Medical Communications Office,Medical Evaluation Unit 1,Medical Evaluation Unit 2,Medical Evaluation Unit 3,Medical Excellence Office,Medical Excellence Team,Medical Governance Office,Medical Governance Unit,Medical Innovation Group,Medical Research Evaluation,Medical Scientific Information Center,New Product Value Planning,Operational Effectiveness,Operational Excellence,Post-Marketing Study Strategy Management,Product Management Review,Regulatory Affairs Unit 1,Regulatory Affairs Unit 2,Regulatory Affairs Unit 3,Scientific Information Center,Strategic Management Office 1,Strategic Management Office 2,Strategic Management Office 3,Strategic Management Team 1,Strategic Management Team 2,Strategic Management Team 3,Strategic Medical Excellence
+MRE,Clinical Research Division,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+MRE,Clinical Strategy Division,1,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+MRE,Clinical Strategy Group,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+MSIC,Medical Communications Office,0,0,0,0,0,0,0,1,1,1,0,1,0,1,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,0
+MAU,Medical Evaluation Unit 1,0,0,0,0,0,1,0,1,1,0,0,0,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0
+MAU,Medical Evaluation Unit 2,0,0,0,0,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0
+MAU,Medical Evaluation Unit 3,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ME,Medical Excellence Office,0,0,0,1,1,1,1,0,1,1,0,1,1,0,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1
+ME,Medical Excellence Team,0,0,0,1,1,1,1,1,0,1,0,1,1,0,1,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1
+SME,Medical Governance Office,0,0,0,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0
+SME,Medical Governance Unit,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+SME,Medical Innovation Group,0,0,0,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0
+MRE,Medical Research Evaluation,1,1,1,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0
+MSIC,Medical Scientific Information Center,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,0
+SME,New Product Value Planning,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Operational Effectiveness,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Operational Excellence,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Post-Marketing Study Strategy Management,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0
+MRE,Product Management Review,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0
+PMS,Regulatory Affairs Unit 1,0,0,0,0,1,1,0,1,1,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0
+PMS,Regulatory Affairs Unit 2,0,0,0,1,1,1,0,1,1,1,0,0,1,1,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0
+PMS,Regulatory Affairs Unit 3,0,0,0,1,1,1,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0
+MSIC,Scientific Information Center,0,0,0,1,0,0,0,1,1,1,0,1,0,1,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0
+PMS,Strategic Management Office 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Strategic Management Office 2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Strategic Management Office 3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Strategic Management Team 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Strategic Management Team 2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PMS,Strategic Management Team 3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+SME,Strategic Medical Excellence,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
