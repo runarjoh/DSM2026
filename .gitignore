@@ -1,5 +1,30 @@
+# Manually excluded files
 /Communication matrix (Relationship work effort - Importance (Avg)).xlsx
 /Communication matrix (Relationship work effort - Relationship Count).xlsx
 /consolidation_potential_DSM_scenario1.xlsx
 /reconfig orig exports
-/~$consolidation_potential_DSM_scenario1_SA4_FTE2_2026-08-04-12h27.xlsx
+
+# Microsoft Office temp files
+~$*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Generated output figures
+*.png
