@@ -1,6 +1,7 @@
 import { useReducer, useEffect, useRef } from "react";
 import DataImport, { type FileInfo } from "./components/DataImport";
 import MatrixPreview from "./components/MatrixPreview";
+import ConfigureRun from "./components/ConfigureRun";
 
 // --- Types ---
 
@@ -220,6 +221,109 @@ export default function App() {
     }
   }
 
+  async function startRun() {
+    const freqPath = s.freqFile?.path || "";
+    const consolPath = s.consolFile?.path || "";
+
+    if (s.mode === "optimize") {
+      const ga: Record<string, number | string> = {};
+      const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
+      const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
+      floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
+      intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
+      ga.consolidation_mode = s.gaParams.consolidation_mode;
+
+      const res = await fetch("/api/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ga, freq_csv: freqPath, consol_csv: consolPath }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        dispatch({ type: "error", message: err.detail || "Failed to start" });
+        return;
+      }
+      const { run_id } = await res.json();
+      dispatch({ type: "start", runId: run_id });
+      connectSSE(`/api/optimize/${run_id}/stream`);
+    } else {
+      // Tune or Tune+Optimize
+      const optuna: Record<string, number | string> = {
+        param_group: s.optunaParams.param_group,
+        n_trials: parseInt(s.optunaParams.n_trials),
+        n_jobs: parseInt(s.optunaParams.n_jobs),
+        trial_generations: parseInt(s.optunaParams.trial_generations),
+        trial_population: parseInt(s.optunaParams.trial_population),
+      };
+
+      const endpoint = s.runAfterTune ? "/api/tune-optimize" : "/api/tune";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optuna, freq_csv: freqPath, consol_csv: consolPath }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        dispatch({ type: "error", message: err.detail || "Failed to start" });
+        return;
+      }
+      const { run_id } = await res.json();
+      dispatch({ type: "start", runId: run_id });
+      connectSSE(`${endpoint}/${run_id}/stream`);
+    }
+  }
+
+  function connectSSE(url: string) {
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onmessage = (e) => {
+      const evt = JSON.parse(e.data);
+      switch (evt.type) {
+        case "progress":
+          dispatch({ type: "progress", point: { gen: evt.gen, avg: evt.avg, min: evt.min, max: evt.max } });
+          break;
+        case "trial":
+          dispatch({ type: "trial", point: { trial: evt.trial, value: evt.value, best: evt.best } });
+          break;
+        case "phase":
+          dispatch({ type: "phase", phase: evt.phase });
+          break;
+        case "done":
+          dispatch({
+            type: "done",
+            result: {
+              fitness: evt.fitness,
+              resultPath: evt.result_path,
+              figurePath: evt.figure_path,
+              bestParams: evt.best_params,
+            },
+          });
+          es.close();
+          break;
+        case "error":
+          dispatch({ type: "error", message: evt.message });
+          es.close();
+          break;
+        case "cancelled":
+          dispatch({ type: "cancelled" });
+          es.close();
+          break;
+      }
+    };
+
+    es.onerror = () => {
+      dispatch({ type: "error", message: "Connection lost" });
+      es.close();
+    };
+  }
+
+  async function cancelRun() {
+    if (!s.runId) return;
+    const endpoint = s.mode === "optimize" ? "optimize" : s.runAfterTune ? "tune-optimize" : "tune";
+    await fetch(`/api/${endpoint}/${s.runId}/cancel`, { method: "POST" });
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-slate-800 text-white px-6 py-3 flex items-center gap-2">
@@ -248,14 +352,22 @@ export default function App() {
           units={s.units}
         />
 
-        {/* Section 3: Configure & Run — placeholder */}
-        <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!dataReady ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex items-center gap-2">
-            <span className={`${dataReady ? "bg-blue-600" : "bg-gray-400"} text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold`}>3</span>
-            <h2 className="text-base font-semibold">Configure & Run</h2>
-          </div>
-          <p className="text-sm text-gray-500 mt-2">{dataReady ? "Coming next" : "Load data first"}</p>
-        </section>
+        {/* Section 3: Configure & Run */}
+        <ConfigureRun
+          mode={s.mode}
+          runAfterTune={s.runAfterTune}
+          gaParams={s.gaParams}
+          optunaParams={s.optunaParams}
+          status={s.status}
+          dataReady={dataReady}
+          onModeChange={(m) => dispatch({ type: "setMode", mode: m })}
+          onRunAfterTuneChange={(v) => dispatch({ type: "setRunAfterTune", value: v })}
+          onGaParam={(f, v) => dispatch({ type: "setGaParam", field: f, value: v })}
+          onOptunaParam={(f, v) => dispatch({ type: "setOptunaParam", field: f, value: v })}
+          onRun={startRun}
+          onCancel={cancelRun}
+          onReset={() => dispatch({ type: "reset" })}
+        />
 
         {/* Section 4: Results — placeholder */}
         <section className="bg-white rounded-lg border border-gray-200 p-6 opacity-50">
