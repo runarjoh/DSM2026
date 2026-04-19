@@ -78,8 +78,18 @@ def read_config():
 
 
 @app.get("/api/matrix-preview")
-def matrix_preview(freq_csv: str | None = None, consol_csv: str | None = None):
-    """Return raw matrix data for frontend heatmap/table rendering."""
+def matrix_preview(
+    freq_csv: str | None = None,
+    consol_csv: str | None = None,
+    grouping_units: str | None = None,
+    grouping_clusters: str | None = None,
+):
+    """Return raw matrix data for frontend heatmap/table rendering.
+
+    If grouping_units and grouping_clusters are provided (JSON arrays),
+    reorder the matrices by cluster assignment.
+    """
+    import json
     from dsm_ga import load_data
 
     cfg = get_app_config()
@@ -91,12 +101,54 @@ def matrix_preview(freq_csv: str | None = None, consol_csv: str | None = None):
     except Exception as e:
         raise HTTPException(400, f"Failed to load matrices: {e}")
 
-    return {
+    groups = None
+    if grouping_units and grouping_clusters:
+        try:
+            g_units = json.loads(grouping_units)
+            g_clusters = json.loads(grouping_clusters)
+            unit_to_cluster = dict(zip(g_units, g_clusters))
+
+            # Assign clusters to current units (default to 999 for unmatched)
+            unit_groups = [unit_to_cluster.get(u, 999) for u in units]
+
+            # Sort by cluster
+            sorted_indices = sorted(range(len(units)), key=lambda i: unit_groups[i])
+            units = [units[i] for i in sorted_indices]
+            groups = [unit_groups[i] for i in sorted_indices]
+
+            dsm_freq = dsm_freq.iloc[sorted_indices].iloc[:, sorted_indices].copy()
+            dsm_freq.index = dsm_freq.columns = units
+            dsm_consol = dsm_consol.iloc[sorted_indices].iloc[:, sorted_indices].copy()
+            dsm_consol.index = dsm_consol.columns = units
+        except Exception as e:
+            raise HTTPException(400, f"Failed to apply grouping: {e}")
+
+    result = {
         "units": units,
         "freq": dsm_freq.values.tolist(),
         "consol": dsm_consol.values.tolist(),
         "shape": [len(units), len(units)],
     }
+    if groups is not None:
+        result["groups"] = groups
+    return result
+
+
+@app.post("/api/parse-grouping")
+async def parse_grouping(file: UploadFile):
+    """Parse a grouping Excel file and return unit-to-cluster mapping."""
+    import io
+    import pandas as pd
+
+    content = await file.read()
+    try:
+        grouping_df = pd.read_excel(io.BytesIO(content), sheet_name="grouping")
+    except Exception as e:
+        raise HTTPException(400, f"Failed to read grouping sheet: {e}")
+
+    units = grouping_df["Unit Name"].tolist()
+    clusters = [int(str(c).replace("Cluster ", "")) for c in grouping_df["Cluster"]]
+    return {"units": units, "clusters": clusters}
 
 
 @app.post("/api/config/save")

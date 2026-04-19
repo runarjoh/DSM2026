@@ -4,7 +4,8 @@ interface Props {
   matrix: number[][];
   units: string[];
   binary?: boolean; // true for consolidation (0/1), false for frequency (continuous)
-  consolOverlay?: number[][] | null; // when set, draw consolidation borders on top of frequency colors
+  consolOverlay?: number[][] | null; // when set, use blue fill for consolidation cells
+  groups?: number[] | null; // cluster assignments — draws cluster rectangles and labels
 }
 
 const FREQ_COLORS = [
@@ -18,7 +19,7 @@ function freqColor(value: number, max: number): string {
   return FREQ_COLORS[idx];
 }
 
-export default function Heatmap({ matrix, units, binary = false, consolOverlay = null }: Props) {
+export default function Heatmap({ matrix, units, binary = false, consolOverlay = null, groups = null }: Props) {
   const n = units.length;
 
   const maxVal = useMemo(() => {
@@ -126,6 +127,57 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
             );
           })
         )}
+
+        {/* Cluster rectangles and labels */}
+        {groups && (() => {
+          const clusterStart: Record<number, number> = {};
+          const clusterEnd: Record<number, number> = {};
+          groups.forEach((g, i) => {
+            if (!(g in clusterStart)) clusterStart[g] = i;
+            clusterEnd[g] = i;
+          });
+          const clusterIds = Object.keys(clusterStart).map(Number).sort((a, b) => a - b);
+          const lw = Math.max(1.2, Math.min(2.0, 14.0 / n));
+          const clblFs = Math.max(6, Math.min(10, 100.0 / n));
+          return clusterIds.map((g) => {
+            const s = clusterStart[g];
+            const e = clusterEnd[g];
+            const cx = labelMargin + (s + e) / 2 * cellSize + cellSize / 2;
+            const cy = labelMargin + (s + e) / 2 * cellSize + cellSize / 2;
+            return (
+              <g key={`cluster-${g}`}>
+                <rect
+                  x={labelMargin + s * cellSize}
+                  y={labelMargin + s * cellSize}
+                  width={(e - s + 1) * cellSize}
+                  height={(e - s + 1) * cellSize}
+                  fill="none"
+                  stroke="#111111"
+                  strokeWidth={lw}
+                />
+                <rect
+                  x={cx - clblFs * 1.2}
+                  y={cy - clblFs * 0.7}
+                  width={clblFs * 2.4}
+                  height={clblFs * 1.4}
+                  fill="white"
+                  fillOpacity={0.75}
+                  rx={2}
+                />
+                <text
+                  x={cx}
+                  y={cy + clblFs * 0.3}
+                  fontSize={clblFs}
+                  fontWeight="bold"
+                  fill="#222222"
+                  textAnchor="middle"
+                >
+                  G{g}
+                </text>
+              </g>
+            );
+          });
+        })()}
         </g>
       </svg>
 

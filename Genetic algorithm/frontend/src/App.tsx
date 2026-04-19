@@ -28,6 +28,8 @@ interface AppState {
   freqMatrix: number[][] | null;
   consolMatrix: number[][] | null;
   units: string[];
+  groupingFile: { name: string } | null;
+  priorGroups: number[] | null;
   dataError: string | null;
 
   // Run config
@@ -66,7 +68,9 @@ type Action =
   | { type: "error"; message: string }
   | { type: "cancelled" }
   | { type: "reset" }
-  | { type: "replaceFile"; which: "freq" | "consol"; file: FileInfo; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] };
+  | { type: "replaceFile"; which: "freq" | "consol"; file: FileInfo; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
+  | { type: "setGrouping"; file: { name: string }; groups: number[]; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
+  | { type: "clearGrouping"; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] };
 
 const defaultGaParams: Record<string, string> = {
   alpha: "0.15", beta: "0.05", gamma: "0.15", delta: "0.20",
@@ -102,6 +106,20 @@ function reducer(state: AppState, action: Action): AppState {
       else update.consolFile = action.file;
       return { ...state, ...update };
     }
+    case "setGrouping":
+      return {
+        ...state,
+        groupingFile: action.file, priorGroups: action.groups,
+        freqMatrix: action.freqMatrix, consolMatrix: action.consolMatrix,
+        units: action.units, dataError: null,
+      };
+    case "clearGrouping":
+      return {
+        ...state,
+        groupingFile: null, priorGroups: null,
+        freqMatrix: action.freqMatrix, consolMatrix: action.consolMatrix,
+        units: action.units, dataError: null,
+      };
     case "setMode":
       return { ...state, mode: action.mode };
     case "setRunAfterTune":
@@ -132,7 +150,8 @@ function reducer(state: AppState, action: Action): AppState {
 const initialState: AppState = {
   freqFile: null, consolFile: null,
   freqMatrix: null, consolMatrix: null,
-  units: [], dataError: null,
+  units: [], groupingFile: null, priorGroups: null,
+  dataError: null,
   mode: "optimize", runAfterTune: false,
   gaParams: { ...defaultGaParams },
   optunaParams: { ...defaultOptunaParams },
@@ -219,6 +238,61 @@ export default function App() {
       });
     } catch (e: unknown) {
       dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Upload failed" });
+    }
+  }
+
+  async function handleGroupingUpload(file: File) {
+    try {
+      // Parse the grouping file
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/parse-grouping", { method: "POST", body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to parse grouping");
+      }
+      const { units: gUnits, clusters } = await res.json();
+
+      // Re-fetch matrix preview reordered by grouping
+      const freqPath = s.freqFile?.path || "";
+      const consolPath = s.consolFile?.path || "";
+      const url = `/api/matrix-preview?freq_csv=${encodeURIComponent(freqPath)}&consol_csv=${encodeURIComponent(consolPath)}&grouping_units=${encodeURIComponent(JSON.stringify(gUnits))}&grouping_clusters=${encodeURIComponent(JSON.stringify(clusters))}`;
+      const matRes = await fetch(url);
+      if (!matRes.ok) {
+        const err = await matRes.json();
+        throw new Error(err.detail || "Failed to reorder matrices");
+      }
+      const mat = await matRes.json();
+
+      dispatch({
+        type: "setGrouping",
+        file: { name: file.name },
+        groups: mat.groups,
+        freqMatrix: mat.freq,
+        consolMatrix: mat.consol,
+        units: mat.units,
+      });
+    } catch (e: unknown) {
+      dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Grouping import failed" });
+    }
+  }
+
+  async function handleGroupingClear() {
+    try {
+      const freqPath = s.freqFile?.path || "";
+      const consolPath = s.consolFile?.path || "";
+      const matRes = await fetch(`/api/matrix-preview?freq_csv=${encodeURIComponent(freqPath)}&consol_csv=${encodeURIComponent(consolPath)}`);
+      if (!matRes.ok) throw new Error("Failed to reload matrices");
+      const mat = await matRes.json();
+
+      dispatch({
+        type: "clearGrouping",
+        freqMatrix: mat.freq,
+        consolMatrix: mat.consol,
+        units: mat.units,
+      });
+    } catch (e: unknown) {
+      dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Failed to clear grouping" });
     }
   }
 
@@ -340,7 +414,10 @@ export default function App() {
         <DataImport
           freqFile={s.freqFile}
           consolFile={s.consolFile}
+          groupingFile={s.groupingFile}
           onReplace={handleReplace}
+          onGroupingUpload={handleGroupingUpload}
+          onGroupingClear={handleGroupingClear}
           disabled={s.status === "running"}
         />
 
@@ -355,6 +432,7 @@ export default function App() {
           freqMatrix={s.freqMatrix}
           consolMatrix={s.consolMatrix}
           units={s.units}
+          groups={s.priorGroups}
         />
 
         {/* Section 3: Configure & Run */}

@@ -6,9 +6,10 @@ interface Props {
   freqMatrix: number[][] | null;
   consolMatrix: number[][] | null;
   units: string[];
+  groups?: number[] | null;
 }
 
-export default function MatrixPreview({ freqMatrix, consolMatrix, units }: Props) {
+export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups = null }: Props) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
   const [which, setWhich] = useState<"freq" | "consol" | "combined">("combined");
 
@@ -63,7 +64,7 @@ export default function MatrixPreview({ freqMatrix, consolMatrix, units }: Props
 
       {matrix ? (
         view === "heatmap" ? (
-          <Heatmap matrix={matrix} units={units} binary={binary} consolOverlay={which === "combined" ? consolMatrix : null} />
+          <Heatmap matrix={matrix} units={units} binary={binary} consolOverlay={which === "combined" ? consolMatrix : null} groups={groups} />
         ) : (
           <DataTable matrix={matrix} units={units} binary={binary} />
         )
