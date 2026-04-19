@@ -24,8 +24,8 @@ interface ResultData {
 }
 
 interface Props {
-  status: string;
-  phase: string;
+  status: "idle" | "running" | "done" | "error" | "cancelled";
+  phase: "idle" | "tune" | "optimize";
   progressData: ProgressPoint[];
   trialData: TrialPoint[];
   result: ResultData | null;

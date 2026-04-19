@@ -223,54 +223,58 @@ export default function App() {
   }
 
   async function startRun() {
-    const freqPath = s.freqFile?.path || "";
-    const consolPath = s.consolFile?.path || "";
+    try {
+      const freqPath = s.freqFile?.path || "";
+      const consolPath = s.consolFile?.path || "";
 
-    if (s.mode === "optimize") {
-      const ga: Record<string, number | string> = {};
-      const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
-      const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
-      floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
-      intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
-      ga.consolidation_mode = s.gaParams.consolidation_mode;
+      if (s.mode === "optimize") {
+        const ga: Record<string, number | string> = {};
+        const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
+        const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
+        floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
+        intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
+        ga.consolidation_mode = s.gaParams.consolidation_mode;
 
-      const res = await fetch("/api/optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ga, freq_csv: freqPath, consol_csv: consolPath }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        dispatch({ type: "error", message: err.detail || "Failed to start" });
-        return;
+        const res = await fetch("/api/optimize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ga, freq_csv: freqPath, consol_csv: consolPath }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          dispatch({ type: "error", message: err.detail || "Failed to start" });
+          return;
+        }
+        const { run_id } = await res.json();
+        dispatch({ type: "start", runId: run_id });
+        connectSSE(`/api/optimize/${run_id}/stream`);
+      } else {
+        // Tune or Tune+Optimize
+        const optuna: Record<string, number | string> = {
+          param_group: s.optunaParams.param_group,
+          n_trials: parseInt(s.optunaParams.n_trials),
+          n_jobs: parseInt(s.optunaParams.n_jobs),
+          trial_generations: parseInt(s.optunaParams.trial_generations),
+          trial_population: parseInt(s.optunaParams.trial_population),
+        };
+
+        const endpoint = s.runAfterTune ? "/api/tune-optimize" : "/api/tune";
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ optuna, freq_csv: freqPath, consol_csv: consolPath }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          dispatch({ type: "error", message: err.detail || "Failed to start" });
+          return;
+        }
+        const { run_id } = await res.json();
+        dispatch({ type: "start", runId: run_id });
+        connectSSE(`${endpoint}/${run_id}/stream`);
       }
-      const { run_id } = await res.json();
-      dispatch({ type: "start", runId: run_id });
-      connectSSE(`/api/optimize/${run_id}/stream`);
-    } else {
-      // Tune or Tune+Optimize
-      const optuna: Record<string, number | string> = {
-        param_group: s.optunaParams.param_group,
-        n_trials: parseInt(s.optunaParams.n_trials),
-        n_jobs: parseInt(s.optunaParams.n_jobs),
-        trial_generations: parseInt(s.optunaParams.trial_generations),
-        trial_population: parseInt(s.optunaParams.trial_population),
-      };
-
-      const endpoint = s.runAfterTune ? "/api/tune-optimize" : "/api/tune";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ optuna, freq_csv: freqPath, consol_csv: consolPath }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        dispatch({ type: "error", message: err.detail || "Failed to start" });
-        return;
-      }
-      const { run_id } = await res.json();
-      dispatch({ type: "start", runId: run_id });
-      connectSSE(`${endpoint}/${run_id}/stream`);
+    } catch (e: unknown) {
+      dispatch({ type: "error", message: e instanceof Error ? e.message : "Failed to connect" });
     }
   }
 

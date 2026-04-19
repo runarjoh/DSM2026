@@ -3,7 +3,7 @@ interface Props {
   runAfterTune: boolean;
   gaParams: Record<string, string>;
   optunaParams: Record<string, string>;
-  status: string;
+  status: "idle" | "running" | "done" | "error" | "cancelled";
   dataReady: boolean;
   onModeChange: (mode: "optimize" | "tune") => void;
   onRunAfterTuneChange: (v: boolean) => void;
