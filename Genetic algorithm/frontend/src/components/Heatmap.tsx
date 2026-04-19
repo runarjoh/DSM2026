@@ -4,6 +4,7 @@ interface Props {
   matrix: number[][];
   units: string[];
   binary?: boolean; // true for consolidation (0/1), false for frequency (continuous)
+  consolOverlay?: number[][] | null; // when set, draw consolidation borders on top of frequency colors
 }
 
 const FREQ_COLORS = [
@@ -17,7 +18,7 @@ function freqColor(value: number, max: number): string {
   return FREQ_COLORS[idx];
 }
 
-export default function Heatmap({ matrix, units, binary = false }: Props) {
+export default function Heatmap({ matrix, units, binary = false, consolOverlay = null }: Props) {
   const n = units.length;
 
   const maxVal = useMemo(() => {
@@ -33,14 +34,20 @@ export default function Heatmap({ matrix, units, binary = false }: Props) {
   const cellSize = n <= 16 ? 28 : n <= 24 ? 22 : n <= 32 ? 18 : 14;
   const fontSize = n <= 16 ? 10 : n <= 24 ? 8 : n <= 32 ? 7 : 6;
   const labelFontSize = n <= 16 ? 11 : n <= 24 ? 9 : n <= 32 ? 7 : 6;
-  const labelMargin = n <= 16 ? 100 : n <= 24 ? 80 : 70;
+  // Estimate label margin from longest unit name (~0.55 chars per px at given font size)
+  const maxLabelLen = useMemo(() => Math.max(...units.map((u) => u.length)), [units]);
+  const labelMargin = Math.max(70, Math.ceil(maxLabelLen * labelFontSize * 0.55) + 10);
 
+  // Extra space above the grid for rotated column labels (text rotated -45° extends upward and left)
+  const colLabelExtent = Math.ceil(maxLabelLen * labelFontSize * 0.55 * Math.sin(Math.PI / 4));
+  const topPad = Math.max(0, colLabelExtent - labelMargin + 10);
   const svgW = labelMargin + n * cellSize;
-  const svgH = labelMargin + n * cellSize;
+  const svgH = labelMargin + topPad + n * cellSize;
 
   return (
-    <div className="overflow-auto">
-      <svg width={svgW} height={svgH} className="mx-auto">
+    <div className="overflow-auto" style={{ paddingTop: topPad > 0 ? 0 : undefined }}>
+      <svg width={svgW} height={svgH} overflow="visible" className="mx-auto">
+        <g transform={`translate(0, ${topPad})`}>
         {/* Column labels (top, rotated 45deg) */}
         {units.map((u, i) => (
           <text
@@ -105,10 +112,24 @@ export default function Heatmap({ matrix, units, binary = false }: Props) {
                     {val % 1 === 0 ? val : val.toFixed(1)}
                   </text>
                 )}
+                {/* Consolidation overlay border */}
+                {consolOverlay && !isDiag && consolOverlay[r]?.[c] === 1 && (
+                  <rect
+                    x={labelMargin + c * cellSize + 1}
+                    y={labelMargin + r * cellSize + 1}
+                    width={cellSize - 2}
+                    height={cellSize - 2}
+                    fill="none"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    rx={1}
+                  />
+                )}
               </g>
             );
           })
         )}
+        </g>
       </svg>
 
       {/* Legend */}
@@ -127,6 +148,13 @@ export default function Heatmap({ matrix, units, binary = false }: Props) {
               <div key={i} className="w-4 h-3 rounded-sm" style={{ background: c }} />
             ))}
             <span>High</span>
+            {consolOverlay && (
+              <>
+                <span className="ml-3">|</span>
+                <div className="w-4 h-3 rounded-sm border-2 border-orange-500 ml-1" />
+                <span>Consolidation potential</span>
+              </>
+            )}
           </>
         )}
       </div>

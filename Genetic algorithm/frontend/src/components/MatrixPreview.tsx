@@ -10,9 +10,9 @@ interface Props {
 
 export default function MatrixPreview({ freqMatrix, consolMatrix, units }: Props) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
-  const [which, setWhich] = useState<"freq" | "consol">("freq");
+  const [which, setWhich] = useState<"freq" | "consol" | "combined">("freq");
 
-  const matrix = which === "freq" ? freqMatrix : consolMatrix;
+  const matrix = which === "consol" ? consolMatrix : freqMatrix;
   const binary = which === "consol";
 
   return (
@@ -53,11 +53,17 @@ export default function MatrixPreview({ freqMatrix, consolMatrix, units }: Props
         >
           Consolidation
         </button>
+        <button
+          className={`text-xs px-2 py-0.5 rounded border ${which === "combined" ? "border-blue-600 bg-blue-50 text-blue-600" : "border-gray-200 text-gray-500"}`}
+          onClick={() => setWhich("combined")}
+        >
+          Combined
+        </button>
       </div>
 
       {matrix ? (
         view === "heatmap" ? (
-          <Heatmap matrix={matrix} units={units} binary={binary} />
+          <Heatmap matrix={matrix} units={units} binary={binary} consolOverlay={which === "combined" ? consolMatrix : null} />
         ) : (
           <DataTable matrix={matrix} units={units} binary={binary} />
         )
