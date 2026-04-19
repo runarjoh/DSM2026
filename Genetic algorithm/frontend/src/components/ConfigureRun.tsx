@@ -87,15 +87,15 @@ export default function ConfigureRun({
               </label>
             ))}
             <label className="block">
-              <span className="text-xs text-gray-500">Consolidation mode</span>
+              <span className="text-xs text-gray-500">Consolidation counting</span>
               <select
                 className="mt-1 block w-full rounded border-gray-300 border px-2 py-1 text-sm"
                 value={gaParams.consolidation_mode || "once"}
                 onChange={(e) => onGaParam("consolidation_mode", e.target.value)}
                 disabled={disabled}
               >
-                <option value="once">once</option>
-                <option value="directional">directional</option>
+                <option value="once">Once per pair</option>
+                <option value="directional">Directional (count both cells)</option>
               </select>
             </label>
           </div>
