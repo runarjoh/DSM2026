@@ -1,5 +1,6 @@
 import { useReducer, useEffect, useRef } from "react";
 import DataImport, { type FileInfo } from "./components/DataImport";
+import MatrixPreview from "./components/MatrixPreview";
 
 // --- Types ---
 
@@ -240,18 +241,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Section 2: Matrix Preview — placeholder */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold">2</span>
-            <h2 className="text-base font-semibold">Matrix Preview</h2>
-          </div>
-          {dataReady ? (
-            <p className="text-sm text-gray-500 mt-2">{s.units.length} units loaded — visualization coming next</p>
-          ) : (
-            <p className="text-sm text-gray-400 mt-2">Loading...</p>
-          )}
-        </section>
+        {/* Section 2: Matrix Preview */}
+        <MatrixPreview
+          freqMatrix={s.freqMatrix}
+          consolMatrix={s.consolMatrix}
+          units={s.units}
+        />
 
         {/* Section 3: Configure & Run — placeholder */}
         <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!dataReady ? "opacity-50 pointer-events-none" : ""}`}>
