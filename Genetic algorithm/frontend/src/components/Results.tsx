@@ -2,6 +2,7 @@ import {
   LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+import Heatmap from "./Heatmap";
 
 interface ProgressPoint {
   gen: number;
@@ -21,6 +22,10 @@ interface ResultData {
   resultPath?: string;
   figurePath?: string;
   bestParams?: Record<string, number | string>;
+  resultFreq?: number[][];
+  resultConsol?: number[][];
+  resultUnits?: string[];
+  resultGroups?: number[];
 }
 
 interface Props {
@@ -120,14 +125,14 @@ export default function Results({ status, phase, progressData, trialData, result
             </div>
           )}
 
-          {/* DSM figure */}
-          {result.figurePath && (
+          {/* DSM heatmap */}
+          {result.resultFreq && result.resultConsol && result.resultUnits && (
             <div className="mb-4">
               <div className="text-xs font-semibold text-gray-500 mb-2">Optimized DSM</div>
-              <img
-                src={`/api/results/${result.figurePath}`}
-                alt="Optimized DSM Figure"
-                className="max-w-full rounded border border-gray-200"
+              <Heatmap
+                matrix={result.resultFreq}
+                units={result.resultUnits}
+                consolOverlay={result.resultConsol}
               />
             </div>
           )}

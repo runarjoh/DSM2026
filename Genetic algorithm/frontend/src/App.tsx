@@ -47,6 +47,10 @@ interface AppState {
     resultPath?: string;
     figurePath?: string;
     bestParams?: Record<string, number | string>;
+    resultFreq?: number[][];
+    resultConsol?: number[][];
+    resultUnits?: string[];
+    resultGroups?: number[];
   } | null;
   error: string | null;
 }
@@ -302,6 +306,10 @@ export default function App() {
               resultPath: evt.result_path,
               figurePath: evt.figure_path,
               bestParams: evt.best_params,
+              resultFreq: evt.result_freq,
+              resultConsol: evt.result_consol,
+              resultUnits: evt.result_units,
+              resultGroups: evt.result_groups,
             },
           });
           es.close();

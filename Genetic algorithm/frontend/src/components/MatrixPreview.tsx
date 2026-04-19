@@ -10,7 +10,7 @@ interface Props {
 
 export default function MatrixPreview({ freqMatrix, consolMatrix, units }: Props) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
-  const [which, setWhich] = useState<"freq" | "consol" | "combined">("freq");
+  const [which, setWhich] = useState<"freq" | "consol" | "combined">("combined");
 
   const matrix = which === "consol" ? consolMatrix : freqMatrix;
   const binary = which === "consol";
