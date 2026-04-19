@@ -81,14 +81,24 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
         {matrix.map((row, r) =>
           row.map((val, c) => {
             const isDiag = r === c;
+            const hasConsol = consolOverlay && !isDiag && consolOverlay[r]?.[c] === 1;
             let fill = "#f8fafc";
             if (isDiag) {
               fill = "#d1d5db";
+            } else if (consolOverlay) {
+              // Combined mode: blue fill for consolidation, white for no consolidation
+              fill = hasConsol ? "#668fd9" : "#ffffff";
             } else if (binary) {
-              fill = val === 1 ? "#3b82f6" : "#f8fafc";
-            } else if (val > 0) {
-              fill = freqColor(val, maxVal);
+              fill = val === 1 ? "#668fd9" : "#f8fafc";
+            } else {
+              // Frequency-only mode: color gradient
+              if (val > 0) fill = freqColor(val, maxVal);
             }
+
+            // Text color: white on blue, dark on white
+            const textColor = hasConsol || (binary && val === 1) ? "#ffffff"
+              : (!binary && !consolOverlay && val / maxVal > 0.5) ? "#ffffff"
+              : "#333333";
 
             return (
               <g key={`${r}-${c}`}>
@@ -106,24 +116,11 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
                     x={labelMargin + c * cellSize + cellSize / 2}
                     y={labelMargin + r * cellSize + cellSize / 2 + fontSize / 3}
                     fontSize={fontSize}
-                    fill={val / maxVal > 0.5 ? "#ffffff" : "#6b7280"}
+                    fill={textColor}
                     textAnchor="middle"
                   >
-                    {val % 1 === 0 ? val : val.toFixed(1)}
+                    {consolOverlay ? Math.round(val) : (val % 1 === 0 ? val : val.toFixed(1))}
                   </text>
-                )}
-                {/* Consolidation overlay border */}
-                {consolOverlay && !isDiag && consolOverlay[r]?.[c] === 1 && (
-                  <rect
-                    x={labelMargin + c * cellSize + 1}
-                    y={labelMargin + r * cellSize + 1}
-                    width={cellSize - 2}
-                    height={cellSize - 2}
-                    fill="none"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    rx={1}
-                  />
                 )}
               </g>
             );
@@ -134,12 +131,12 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
 
       {/* Legend */}
       <div className="flex justify-center items-center gap-1 mt-3 text-xs text-gray-500">
-        {binary ? (
+        {binary || consolOverlay ? (
           <>
-            <div className="w-4 h-3 bg-gray-50 border border-gray-200 rounded-sm" />
-            <span>No potential</span>
-            <div className="w-4 h-3 bg-blue-500 rounded-sm ml-2" />
+            <div className="w-4 h-3 rounded-sm" style={{ background: "#668fd9" }} />
             <span>Consolidation potential</span>
+            <div className="w-4 h-3 bg-white border border-gray-300 rounded-sm ml-2" />
+            <span>No consolidation potential</span>
           </>
         ) : (
           <>
@@ -148,13 +145,6 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
               <div key={i} className="w-4 h-3 rounded-sm" style={{ background: c }} />
             ))}
             <span>High</span>
-            {consolOverlay && (
-              <>
-                <span className="ml-3">|</span>
-                <div className="w-4 h-3 rounded-sm border-2 border-orange-500 ml-1" />
-                <span>Consolidation potential</span>
-              </>
-            )}
           </>
         )}
       </div>
