@@ -2,6 +2,7 @@ import { useReducer, useEffect, useRef } from "react";
 import DataImport, { type FileInfo } from "./components/DataImport";
 import MatrixPreview from "./components/MatrixPreview";
 import ConfigureRun from "./components/ConfigureRun";
+import Results from "./components/Results";
 
 // --- Types ---
 
@@ -369,14 +370,15 @@ export default function App() {
           onReset={() => dispatch({ type: "reset" })}
         />
 
-        {/* Section 4: Results — placeholder */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6 opacity-50">
-          <div className="flex items-center gap-2">
-            <span className="bg-gray-400 text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold">4</span>
-            <h2 className="text-base font-semibold">Results</h2>
-          </div>
-          <p className="text-sm text-gray-400 mt-2">Run an optimization first</p>
-        </section>
+        {/* Section 4: Results */}
+        <Results
+          status={s.status}
+          phase={s.phase}
+          progressData={s.progressData}
+          trialData={s.trialData}
+          result={s.result}
+          error={s.error}
+        />
       </main>
     </div>
   );
