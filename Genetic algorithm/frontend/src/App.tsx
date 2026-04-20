@@ -408,6 +408,27 @@ export default function App() {
               bestParams: evt.best_params,
             },
           });
+          // Apply best params from tuning to GA config and persist
+          if (evt.best_params) {
+            const paramMap: Record<string, string> = {
+              raw_w0: "alpha", raw_w1: "beta", raw_w2: "gamma", raw_w3: "delta",
+            };
+            const gaUpdates: Record<string, string> = {};
+            for (const [k, v] of Object.entries(evt.best_params as Record<string, number | string>)) {
+              const target = paramMap[k] || k;
+              if (target in defaultGaParams) {
+                const strVal = String(typeof v === "number" ? parseFloat(v.toFixed(6)) : v);
+                dispatch({ type: "setGaParam", field: target, value: strVal });
+                gaUpdates[target] = v as never;
+              }
+            }
+            // Persist to config.yaml
+            fetch("/api/config/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ga: gaUpdates }),
+            }).catch(() => {});
+          }
           es.close();
           break;
         case "error":
