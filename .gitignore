@@ -26,5 +26,16 @@ env/
 .coverage
 htmlcov/
 
-# Generated output figures
+# Node
+node_modules/
+
+# AI agent working files
+.claude/
+.superpowers/
+.playwright-mcp/
+Genetic algorithm/docs/superpowers/
+
+# Generated output
+results/
+uploads/
 *.png

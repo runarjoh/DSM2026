@@ -1,5 +1,7 @@
 # DSM Optimization Genetic Algorithm
 
+A web application and CLI for running Design Structure Matrix (DSM) optimization using a genetic algorithm (DEAP), with Optuna hyperparameter tuning and publication-quality visualization.
+
 ## Prerequisites
 
 ### Install uv
@@ -16,6 +18,10 @@ curl -LsSf https://astral.sh/uv | sh
 
 After installing, restart your terminal so the `uv` command is available.
 
+### Install Node.js (for frontend development only)
+
+Node.js 18+ is required if you want to modify the frontend. The pre-built frontend is included in `frontend/dist/` and does not require Node.js to run.
+
 ## Setup
 
 From the `Genetic algorithm/` directory:
@@ -24,33 +30,113 @@ From the `Genetic algorithm/` directory:
 # Create a virtual environment with Python 3.11
 uv venv --python 3.11
 
-# Install all dependencies
-uv sync --no-install-project
-
-# Register the Jupyter kernel
-uv run python -m ipykernel install --user --name dsm-ga --display-name "DSM Genetic Algorithm (3.11)"
+# Install all dependencies (including the dsm-ga CLI)
+uv sync
 ```
 
-## Running the notebook
+## Running the web application
 
 ```bash
-uv run jupyter lab
+uv run dsm-ga serve
 ```
 
-This opens Jupyter in your browser. Open `DSM Optimization Genetic Algorithm - local read.ipynb`.
+This starts the server at http://127.0.0.1:8080. Open this URL in your browser.
 
-## Selecting the right kernel
+The web UI provides four actions:
+- **Optimize** — run the GA with configurable parameters and watch live fitness progress
+- **Tune** — run Optuna hyperparameter tuning with live trial-by-trial results
+- **Tune & Optimize** — run tuning first, then a full GA with the best parameters
+- **Visualize** — generate a publication-quality DSM figure
 
-1. In the open notebook, click **Kernel** in the top menu bar
-2. Select **Change kernel**
-3. Choose **DSM Genetic Algorithm (3.11)**
+Options:
+```bash
+uv run dsm-ga serve --host 0.0.0.0 --port 8080
+```
 
-If the kernel does not appear, re-run the full command above and refresh the page:
+## CLI usage
+
+All commands use a `config.yaml` file for settings. To create a starter config:
 
 ```bash
-uv run python -m ipykernel install --user --name dsm-ga --display-name "DSM Genetic Algorithm (3.11)"
+uv run dsm-ga init-config
 ```
 
-## Note on `scoop`
+Then run any command:
 
-The notebook uses the `scoop` library for parallel computing. This library has known limitations on Windows and may fail when running cells that use `scoop.futures`. This is a platform limitation and does not affect the rest of the notebook.
+```bash
+# Run GA optimization
+uv run dsm-ga run config.yaml
+
+# Run Optuna hyperparameter tuning
+uv run dsm-ga tune config.yaml
+
+# Run tuning then full GA with best params
+uv run dsm-ga tune-optimize config.yaml
+
+# Generate a DSM figure
+uv run dsm-ga visualize config.yaml
+uv run dsm-ga visualize config.yaml --result-xlsx results/optimized.xlsx --title "My DSM"
+```
+
+## Configuration
+
+All settings are in `config.yaml`:
+
+```yaml
+data:
+  freq_csv: "interaction_frequency.csv"
+  consol_csv: "consolidation_potential.csv"
+  output_dir: "./results"
+
+ga:
+  alpha: 0.15          # type 1 error weight
+  beta: 0.05           # type 2 error weight
+  gamma: 0.15          # type 3 error weight
+  delta: 0.20          # cluster imbalance weight
+  max_clusters: 10
+  target_clusters: 10
+  consolidation_mode: "once"   # "once" or "directional"
+  population_size: 200
+  n_generations: 400
+  cxpb: 0.5
+  mutpb: 0.1
+  tournsize: 5
+
+optuna:
+  param_group: "weights"   # "weights", "ga_operators", "clustering", "fitness_and_clustering", "all"
+  n_trials: 50
+  n_jobs: 1
+  trial_generations: 100
+  trial_population: 100
+```
+
+The web UI loads these values as defaults and lets you override them per-run.
+
+## Frontend development
+
+If you want to modify the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+This starts the Vite dev server on http://localhost:5173 with API requests proxied to http://localhost:8080. Run `uv run dsm-ga serve` in a separate terminal.
+
+To rebuild for production:
+
+```bash
+cd frontend
+npm run build
+```
+
+The built files go to `frontend/dist/` and are served automatically by the FastAPI backend.
+
+## Running tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+> **Tip:** All `uv run` commands work without manually activating the virtual environment. If you prefer, you can activate it once with `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (macOS/Linux) and then omit the `uv run` prefix.

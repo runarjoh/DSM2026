@@ -1,32 +1,24 @@
-# DSM GA — Configuration
-# See docs/superpowers/specs/2026-04-17-dsm-web-app-design.md for details.
-
 data:
-  freq_csv: "consolidation_potential_DSM_scenario1_interaction_frequency.csv"
-  consol_csv: "consolidation_potential_DSM_scenario1_SA4_FTE2_2026-08-04-12h27.csv"
-  grouping_xlsx: "prior_grouping_baseline.xlsx"
-  output_dir: "./results"
-  upload_dir: "./uploads"
-
+  freq_csv: consolidation_potential_DSM_scenario1_interaction_frequency.csv
+  consol_csv: consolidation_potential_DSM_scenario1_SA4_FTE2_2026-08-04-12h27.csv
+  grouping_xlsx: prior_grouping_baseline.xlsx
+  output_dir: ./results
+  upload_dir: ./uploads
 ga:
-  # Fitness weights (must sum to < 1.0)
-  alpha: 0.15        # type 1 error: connections across cluster boundaries
-  beta: 0.05         # type 2 error: no connection within cluster
-  gamma: 0.15        # type 3 error: consolidation potential across clusters
-  delta: 0.20        # cluster size imbalance penalty
-  # Clustering
+  alpha: 0.45917552586149
+  beta: 0.018318208059829234
+  gamma: 0.881479532354352
+  delta: 0.4150590798260588
   max_clusters: 10
   target_clusters: 10
-  consolidation_mode: "once"   # "once" | "directional"
-  # GA operators
+  consolidation_mode: once
   population_size: 200
   n_generations: 400
   cxpb: 0.5
   mutpb: 0.1
   tournsize: 5
-
 optuna:
-  param_group: "weights"   # "weights" | "ga_operators" | "clustering" | "fitness_and_clustering" | "all"
+  param_group: weights
   n_trials: 50
   n_jobs: 1
   trial_generations: 100

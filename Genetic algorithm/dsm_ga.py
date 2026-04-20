@@ -9,9 +9,10 @@ Exports:
 import math
 import pickle
 import random
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from deap import algorithms, base, creator, tools
@@ -24,6 +25,14 @@ if not hasattr(creator, "FitnessMin"):
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
 if not hasattr(creator, "Individual"):
     creator.create("Individual", list, fitness=creator.FitnessMin)
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+class CancelledError(Exception):
+    """Raised when a GA run is cancelled via *cancel_event*."""
 
 
 # ---------------------------------------------------------------------------
@@ -150,56 +159,39 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
 
 
 # ---------------------------------------------------------------------------
-# Live progress plot (used only when verbose=True inside a Jupyter kernel)
-# ---------------------------------------------------------------------------
-
-def _update_plot(logbook):
-    from IPython.display import clear_output  # only imported when needed
-
-    gens = logbook.select("gen")
-    avgs = logbook.select("avg")
-    mins = logbook.select("min")
-    maxs = logbook.select("max")
-
-    clear_output(wait=True)
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(gens, avgs, color="black", linewidth=1.5, label="Average")
-    ax.plot(gens, mins, color="red",   linewidth=1.5, label="Minimum")
-    ax.plot(gens, maxs, color="green", linewidth=1.5, label="Maximum")
-    ax.set_xlabel("Generation")
-    ax.set_ylabel("Fitness")
-    ax.legend(loc="upper right")
-    ax.set_title(f"Evolution progress — generation {gens[-1]}")
-    plt.tight_layout()
-    plt.show()
-    print(
-        f"Gen {gens[-1]:4d} | "
-        f"Avg: {avgs[-1]:.4f} | "
-        f"Min: {mins[-1]:.4f} | "
-        f"Max: {maxs[-1]:.4f}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # GA runner
 # ---------------------------------------------------------------------------
 
-def run_ga(dsm_freq, dsm_consol, config: GAConfig, checkpoint_file=None, verbose=False):
+def run_ga(
+    dsm_freq,
+    dsm_consol,
+    config: GAConfig,
+    checkpoint_file: str | None = None,
+    verbose: bool = False,
+    progress_callback: Callable[[int, float, float, float], None] | None = None,
+    cancel_event: threading.Event | None = None,
+):
     """Run the DEAP genetic algorithm.
 
     Parameters
     ----------
-    dsm_freq        : pd.DataFrame  — interaction frequency DSM
-    dsm_consol      : pd.DataFrame  — consolidation potential DSM
-    config          : GAConfig
-    checkpoint_file : str | None    — path for checkpoint pkl; None disables checkpointing
-    verbose         : bool          — show live progress plot (requires Jupyter kernel)
+    dsm_freq          : pd.DataFrame  — interaction frequency DSM
+    dsm_consol        : pd.DataFrame  — consolidation potential DSM
+    config            : GAConfig
+    checkpoint_file   : str | None    — path for checkpoint pkl; None disables checkpointing
+    verbose           : bool          — print progress to stdout
+    progress_callback : callable      — called each generation with (gen, avg, min, max)
+    cancel_event      : threading.Event — checked each generation; exits early when set
 
     Returns
     -------
     best          : list[int]   — cluster assignments for each unit
     logbook       : tools.Logbook
     final_fitness : float
+
+    Raises
+    ------
+    CancelledError  — if cancel_event is set during the run
     """
     n = len(dsm_freq.columns)
     dsm_matrix    = dsm_freq.values.tolist()
@@ -231,6 +223,9 @@ def run_ga(dsm_freq, dsm_consol, config: GAConfig, checkpoint_file=None, verbose
 
     gen = 0
     while gen < config.n_generations:
+        if cancel_event is not None and cancel_event.is_set():
+            raise CancelledError("Run cancelled by user")
+
         if gen == 0 and checkpoint_file:
             try:
                 cp = pickle.load(open(checkpoint_file, "rb"))
@@ -255,8 +250,20 @@ def run_ga(dsm_freq, dsm_consol, config: GAConfig, checkpoint_file=None, verbose
         logbook.record(gen=gen, evals=len(offspring), **record)
         hall_of_fame.update(offspring)
 
+        avg_val = record["avg"]
+        min_val = record["min"]
+        max_val = record["max"]
+
         if verbose and gen % 10 == 0:
-            _update_plot(logbook)
+            print(
+                f"Gen {gen:4d} | "
+                f"Avg: {avg_val:.4f} | "
+                f"Min: {min_val:.4f} | "
+                f"Max: {max_val:.4f}"
+            )
+
+        if progress_callback is not None:
+            progress_callback(gen, float(avg_val), float(min_val), float(max_val))
 
         if checkpoint_file and gen % 1000 == 0 and gen > 0:
             cp = dict(population=population, generation=gen, rndstate=random.getstate())
