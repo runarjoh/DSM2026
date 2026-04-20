@@ -12,6 +12,7 @@ ga:
   max_clusters: 10
   target_clusters: 10
   consolidation_mode: once
+  fitness_mode: classic
   population_size: 200
   n_generations: 400
   cxpb: 0.5

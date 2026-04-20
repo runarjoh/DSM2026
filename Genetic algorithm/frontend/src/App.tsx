@@ -87,7 +87,7 @@ type Action =
 
 const defaultGaParams: Record<string, string> = {
   alpha: "0.15", beta: "0.05", gamma: "0.15", delta: "0.20",
-  max_clusters: "10", target_clusters: "10", consolidation_mode: "once",
+  max_clusters: "10", target_clusters: "10", consolidation_mode: "once", fitness_mode: "classic",
   population_size: "200", n_generations: "400",
   cxpb: "0.5", mutpb: "0.1", tournsize: "5",
 };
@@ -356,6 +356,7 @@ export default function App() {
         floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
         intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
         ga.consolidation_mode = s.gaParams.consolidation_mode;
+        ga.fitness_mode = s.gaParams.fitness_mode;
 
         const res = await fetch("/api/optimize", {
           method: "POST",
@@ -478,6 +479,7 @@ export default function App() {
       floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
       intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
       ga.consolidation_mode = s.gaParams.consolidation_mode;
+      ga.fitness_mode = s.gaParams.fitness_mode;
 
       const body: Record<string, unknown> = { ...config, ga, freq_csv: freqPath, consol_csv: consolPath };
 

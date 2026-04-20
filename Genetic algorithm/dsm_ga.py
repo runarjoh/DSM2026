@@ -46,11 +46,12 @@ class GAConfig:
     alpha: float = 0.15   # type 1 error — connections across cluster boundaries
     beta:  float = 0.05   # type 2 error — no connection within cluster
     gamma: float = 0.15   # type 3 error — consolidation potential across clusters
-    delta: float = 0.20   # cluster size imbalance penalty
+    delta: float = 0.20   # classic: cluster size imbalance / mdl_pure: type 4 consolidation overreach
     # Clustering structure
     max_clusters:       int   = 10
     target_clusters:    int   = 10
     consolidation_mode: str   = "once"  # "once" | "directional"
+    fitness_mode:       str   = "classic"  # "classic" | "mdl_pure"
     # GA operators
     population_size: int   = 200
     n_generations:   int   = 400
@@ -112,7 +113,7 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
             CLi[individual[elem]] += 1
 
         Nc = sum(1 for c in CLi if c > 0)
-        S1 = S2 = S3 = 0
+        S1 = S2 = S3 = S4 = 0
 
         for col in range(n):
             for row in range(n):
@@ -132,27 +133,49 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
                             S3 += 1
                     elif config.consolidation_mode == "directional":
                         S3 += consolidation_matrix[col][row]
-
-        ideal_size = n / config.target_clusters
-        size_imbalance = (
-            sum(
-                (CLi[c] - ideal_size) ** 2
-                for c in range(config.max_clusters)
-                if CLi[c] > 0
-            )
-            / config.target_clusters
-        )
+                if same:
+                    # Type IV: within-cluster pairs with no consolidation potential
+                    if config.consolidation_mode == "once":
+                        if col < row and (
+                            consolidation_matrix[col][row] == 0
+                            and consolidation_matrix[row][col] == 0
+                        ):
+                            S4 += 1
+                    elif config.consolidation_mode == "directional":
+                        if consolidation_matrix[col][row] == 0:
+                            S4 += 1
 
         mdl_weight = 1.0 - config.alpha - config.beta - config.gamma - config.delta
         MDL = Nc * math.log(n, 2) + math.log(n, 2) * sum(CLi)
         log_factor = 2 * math.log(n + 1, 2)
-        fitness = (
-            mdl_weight * MDL
-            + config.alpha * S1 * log_factor
-            + config.beta  * S2 * log_factor
-            + config.gamma * S3 * log_factor
-            + config.delta * size_imbalance
-        )
+
+        if config.fitness_mode == "mdl_pure":
+            # All four error types on the same MDL scale
+            fitness = (
+                mdl_weight * MDL
+                + config.alpha * S1 * log_factor
+                + config.beta  * S2 * log_factor
+                + config.gamma * S3 * log_factor
+                + config.delta * S4 * log_factor
+            )
+        else:
+            # Classic: delta controls cluster size imbalance penalty
+            ideal_size = n / config.target_clusters
+            size_imbalance = (
+                sum(
+                    (CLi[c] - ideal_size) ** 2
+                    for c in range(config.max_clusters)
+                    if CLi[c] > 0
+                )
+                / config.target_clusters
+            )
+            fitness = (
+                mdl_weight * MDL
+                + config.alpha * S1 * log_factor
+                + config.beta  * S2 * log_factor
+                + config.gamma * S3 * log_factor
+                + config.delta * size_imbalance
+            )
         return (fitness,)
 
     return evaluate

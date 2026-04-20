@@ -99,6 +99,7 @@ ga:
   max_clusters: 10
   target_clusters: 10
   consolidation_mode: "once"   # "once" | "directional"
+  fitness_mode: "classic"      # "classic" | "mdl_pure"
   # GA operators
   population_size: 200
   n_generations: 400

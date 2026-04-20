@@ -19,6 +19,7 @@ class GAOverrides(BaseModel):
     max_clusters: int | None = None
     target_clusters: int | None = None
     consolidation_mode: Literal["once", "directional"] | None = None
+    fitness_mode: Literal["classic", "mdl_pure"] | None = None
     population_size: int | None = None
     n_generations: int | None = None
     cxpb: float | None = None
