@@ -118,8 +118,14 @@ export default function Results({ status, phase, progressData, trialData, result
       {/* Progress chart (optimization) */}
       {progressData.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs font-semibold text-gray-500 mb-2">
-            Optimization — Generation {progressData[progressData.length - 1].gen}
+          <div className="flex items-baseline gap-3 mb-2">
+            <div className="text-xs font-semibold text-gray-500">
+              Optimization — Generation {progressData[progressData.length - 1].gen}
+            </div>
+            <div className="text-sm font-mono ml-auto">
+              <span className="text-gray-400">Best fitness: </span>
+              <span className="text-red-600 font-bold">{Math.min(...progressData.map(p => p.min)).toFixed(4)}</span>
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={progressData}>
