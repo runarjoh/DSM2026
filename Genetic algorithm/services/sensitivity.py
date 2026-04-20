@@ -158,7 +158,11 @@ def run_importance(
         )
         source = "new_study"
 
-    importances: dict[str, float] = optuna.importance.get_param_importances(study)
+    raw_importances: dict[str, float] = optuna.importance.get_param_importances(study)
+
+    # Rename raw_w0..3 to their actual parameter names
+    _param_names = {"raw_w0": "alpha", "raw_w1": "beta", "raw_w2": "gamma", "raw_w3": "delta"}
+    importances = {_param_names.get(k, k): v for k, v in raw_importances.items()}
 
     # Logging ------------------------------------------------------------------
     if log_dir is not None:
