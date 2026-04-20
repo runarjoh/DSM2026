@@ -91,6 +91,33 @@ class InitConfigRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Sensitivity Analysis
+# ---------------------------------------------------------------------------
+
+class ImportanceRequest(BaseModel):
+    n_trials: int = 30
+    param_group: str = "all"
+    ga: GAOverrides | None = None
+    freq_csv: str | None = None
+    consol_csv: str | None = None
+
+
+class RobustnessRequest(BaseModel):
+    n_repeats: int = 10
+    ga: GAOverrides | None = None
+    freq_csv: str | None = None
+    consol_csv: str | None = None
+
+
+class SweepRequest(BaseModel):
+    n_steps: int = 10
+    range_multiplier: float = 2.0
+    ga: GAOverrides | None = None
+    freq_csv: str | None = None
+    consol_csv: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------
 
