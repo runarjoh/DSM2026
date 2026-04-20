@@ -530,7 +530,11 @@ export default function App() {
                 maxFitness: evt.max_fitness,
                 ariMean: evt.ari_mean,
               } : undefined,
-              sweeps: evt.sweeps,
+              sweeps: evt.sweeps ? Object.fromEntries(
+                Object.entries(evt.sweeps as Record<string, {value: number; fitness: number; n_clusters: number}[]>).map(
+                  ([k, arr]) => [k, arr.map((d) => ({ value: d.value, fitness: d.fitness, nClusters: d.n_clusters }))]
+                )
+              ) : undefined,
               logPath: evt.log_path,
             },
           });

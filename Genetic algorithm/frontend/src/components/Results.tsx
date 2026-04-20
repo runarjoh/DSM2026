@@ -221,6 +221,9 @@ export default function Results({ status, phase, progressData, trialData, result
               <div className="text-xs font-semibold text-gray-500 mb-1">
                 Parameter Importance (fANOVA) — {sensitivityResult.source === "reused" ? "from previous tuning" : "from dedicated study"}
               </div>
+              <p className="text-xs text-gray-400 mb-2">
+                Shows which parameters have the most influence on fitness outcome. Higher scores mean changes to that parameter produce larger fitness differences.
+              </p>
               <ResponsiveContainer width="100%" height={Math.max(200, Object.keys(sensitivityResult.importances).length * 35)}>
                 <BarChart data={Object.entries(sensitivityResult.importances).map(([k, v]) => ({name: k, importance: v})).sort((a, b) => b.importance - a.importance)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
@@ -237,6 +240,9 @@ export default function Results({ status, phase, progressData, trialData, result
           {sensitivityType === "robustness" && sensitivityResult.robustness && (
             <div className="mb-4">
               <div className="text-xs font-semibold text-gray-500 mb-2">Robustness Analysis</div>
+              <p className="text-xs text-gray-400 mb-2">
+                Each bar shows the final fitness from an independent GA run with identical parameters. Low variance and high ARI (Adjusted Rand Index) indicate the GA converges to consistent clustering solutions.
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                 <div className="text-sm"><span className="text-gray-500">Mean:</span> <span className="font-mono">{sensitivityResult.robustness.meanFitness.toFixed(2)}</span></div>
                 <div className="text-sm"><span className="text-gray-500">Std:</span> <span className="font-mono">{sensitivityResult.robustness.stdFitness.toFixed(2)}</span></div>
@@ -260,20 +266,28 @@ export default function Results({ status, phase, progressData, trialData, result
           {sensitivityType === "sweep" && sensitivityResult.sweeps && (
             <div className="mb-4">
               <div className="text-xs font-semibold text-gray-500 mb-2">Weight Sensitivity Sweep</div>
-              {Object.entries(sensitivityResult.sweeps).map(([weight, data]) => (
-                <div key={weight} className="mb-4">
-                  <div className="text-xs font-medium text-gray-600 mb-1">{weight}</div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={data}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="value" label={{value: weight, position: "insideBottom", offset: -5}} tickFormatter={(v: number) => v.toFixed(2)} />
-                      <YAxis label={{value: "Fitness", angle: -90, position: "insideLeft"}} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="fitness" stroke="#3b82f6" dot={{r: 3}} name="Fitness" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ))}
+              <p className="text-xs text-gray-400 mb-2">
+                Each chart varies one fitness weight while holding the others constant. Blue line shows the composite fitness (lower is better). Orange line shows the number of clusters in the optimal solution. Steep fitness curves indicate the result is sensitive to that weight.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Object.entries(sensitivityResult.sweeps).map(([weight, data]) => (
+                  <div key={weight}>
+                    <div className="text-xs font-medium text-gray-600 mb-1">{weight}</div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={data}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="value" tickFormatter={(v: number) => v.toFixed(2)} tick={{fontSize: 10}} />
+                        <YAxis yAxisId="fitness" label={{value: "Fitness", angle: -90, position: "insideLeft"}} tick={{fontSize: 10}} />
+                        <YAxis yAxisId="clusters" orientation="right" label={{value: "Clusters", angle: 90, position: "insideRight"}} tick={{fontSize: 10}} domain={[0, "auto"]} />
+                        <Tooltip formatter={(v: number, name: string) => [name === "nClusters" ? v : v.toFixed(1), name === "nClusters" ? "Clusters" : "Fitness"]} />
+                        <Legend />
+                        <Line yAxisId="fitness" type="monotone" dataKey="fitness" stroke="#3b82f6" dot={{r: 3}} strokeWidth={1.5} name="Fitness" />
+                        <Line yAxisId="clusters" type="stepAfter" dataKey="nClusters" stroke="#f97316" dot={{r: 2}} strokeWidth={1.5} strokeDasharray="4 2" name="Clusters" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
