@@ -47,7 +47,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
 
   return (
     <div className="overflow-auto" style={{ paddingTop: topPad > 0 ? 0 : undefined }}>
-      <svg width={svgW} height={svgH} overflow="visible" className="mx-auto">
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%" overflow="visible" className="mx-auto">
         <g transform={`translate(0, ${topPad})`}>
         {/* Column labels (top, rotated 45deg) */}
         {units.map((u, i) => (
