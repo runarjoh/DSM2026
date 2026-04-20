@@ -101,11 +101,17 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
     """Return a DEAP-compatible fitness function closed over the DSM data and config."""
     n = len(dsm_matrix)
 
-    # Binarise interaction frequency once
-    binary = [
-        [1 if dsm_matrix[r][c] > 0 else 0 for c in range(n)]
+    # Use actual interaction values — higher values = stronger signal
+    freq = [
+        [float(dsm_matrix[r][c]) for c in range(n)]
         for r in range(n)
     ]
+
+    # Compute max frequency for normalising S2 (missing-within penalty)
+    max_freq = max(
+        (freq[r][c] for r in range(n) for c in range(n) if r != c),
+        default=1.0,
+    ) or 1.0
 
     def evaluate(individual):
         CLi = [0] * config.max_clusters
@@ -113,17 +119,21 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
             CLi[individual[elem]] += 1
 
         Nc = sum(1 for c in CLi if c > 0)
-        S1 = S2 = S3 = S4 = 0
+        S1 = S2 = S3 = S4 = 0.0
 
         for col in range(n):
             for row in range(n):
                 if col == row:
                     continue
                 same = individual[col] == individual[row]
-                if binary[col][row] != 0 and not same:
-                    S1 += 1
-                if binary[col][row] == 0 and same:
-                    S2 += 1
+                val = freq[col][row]
+                if val > 0 and not same:
+                    # Type I: interaction across boundary, weighted by strength
+                    S1 += val
+                if val == 0 and same:
+                    # Type II: no interaction within cluster, penalty = max_freq
+                    # (missing a strong-signal-level connection)
+                    S2 += max_freq
                 if not same:
                     if config.consolidation_mode == "once":
                         if col < row and (
