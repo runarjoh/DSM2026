@@ -188,8 +188,27 @@ export default function App() {
           }
         }
 
-        // Load matrix preview
-        const matRes = await fetch("/api/matrix-preview");
+        // Load grouping if configured, then load matrix preview
+        const groupingPath = cfg.data?.grouping_xlsx || "";
+        let groupingUnits: string[] | null = null;
+        let groupingClusters: number[] | null = null;
+        let groupingFileName = "";
+
+        if (groupingPath) {
+          const gRes = await fetch(`/api/parse-grouping-path?path=${encodeURIComponent(groupingPath)}`);
+          if (gRes.ok) {
+            const g = await gRes.json();
+            groupingUnits = g.units;
+            groupingClusters = g.clusters;
+            groupingFileName = groupingPath;
+          }
+        }
+
+        let matUrl = "/api/matrix-preview";
+        if (groupingUnits && groupingClusters) {
+          matUrl += `?grouping_units=${encodeURIComponent(JSON.stringify(groupingUnits))}&grouping_clusters=${encodeURIComponent(JSON.stringify(groupingClusters))}`;
+        }
+        const matRes = await fetch(matUrl);
         if (!matRes.ok) throw new Error("Failed to load matrices");
         const mat = await matRes.json();
 
@@ -201,6 +220,17 @@ export default function App() {
           consolMatrix: mat.consol,
           units: mat.units,
         });
+
+        if (mat.groups && groupingFileName) {
+          dispatch({
+            type: "setGrouping",
+            file: { name: groupingFileName },
+            groups: mat.groups,
+            freqMatrix: mat.freq,
+            consolMatrix: mat.consol,
+            units: mat.units,
+          });
+        }
       } catch (e: unknown) {
         dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Failed to load" });
       }

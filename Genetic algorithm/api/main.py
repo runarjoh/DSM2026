@@ -134,6 +134,21 @@ def matrix_preview(
     return result
 
 
+@app.get("/api/parse-grouping-path")
+def parse_grouping_path(path: str):
+    """Parse a grouping Excel file from a local path."""
+    import pandas as pd
+
+    try:
+        grouping_df = pd.read_excel(path, sheet_name="grouping")
+    except Exception as e:
+        raise HTTPException(400, f"Failed to read grouping file: {e}")
+
+    units = grouping_df["Unit Name"].tolist()
+    clusters = [int(str(c).replace("Cluster ", "")) for c in grouping_df["Cluster"]]
+    return {"units": units, "clusters": clusters}
+
+
 @app.post("/api/parse-grouping")
 async def parse_grouping(file: UploadFile):
     """Parse a grouping Excel file and return unit-to-cluster mapping."""
