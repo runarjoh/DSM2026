@@ -39,8 +39,8 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
   const maxLabelLen = useMemo(() => Math.max(...units.map((u) => u.length)), [units]);
   const labelMargin = Math.max(70, Math.ceil(maxLabelLen * labelFontSize * 0.55) + 10);
 
-  // Extra space above the grid for rotated column labels (text rotated -45° extends upward and left)
-  const colLabelExtent = Math.ceil(maxLabelLen * labelFontSize * 0.55 * Math.sin(Math.PI / 4));
+  // Extra space above the grid for rotated column labels (text rotated 90° extends straight up)
+  const colLabelExtent = Math.ceil(maxLabelLen * labelFontSize * 0.55);
   const topPad = Math.max(0, colLabelExtent - labelMargin + 10);
   const svgW = labelMargin + n * cellSize;
   const svgH = labelMargin + topPad + n * cellSize;
@@ -49,16 +49,17 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
     <div className="overflow-auto" style={{ paddingTop: topPad > 0 ? 0 : undefined }}>
       <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%" overflow="visible" className="mx-auto">
         <g transform={`translate(0, ${topPad})`}>
-        {/* Column labels (top, rotated 45deg) */}
+        {/* Column labels (top, rotated 90deg — matching matplotlib) */}
         {units.map((u, i) => (
           <text
             key={`col-${i}`}
             x={labelMargin + i * cellSize + cellSize / 2}
             y={labelMargin - 4}
             fontSize={labelFontSize}
-            fill="#374151"
+            fill="#111111"
             textAnchor="start"
-            transform={`rotate(-45, ${labelMargin + i * cellSize + cellSize / 2}, ${labelMargin - 4})`}
+            dominantBaseline="central"
+            transform={`rotate(-90, ${labelMargin + i * cellSize + cellSize / 2}, ${labelMargin - 4})`}
           >
             {u}
           </text>
@@ -71,7 +72,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
             x={labelMargin - 4}
             y={labelMargin + i * cellSize + cellSize / 2 + fontSize / 3}
             fontSize={labelFontSize}
-            fill="#374151"
+            fill="#111111"
             textAnchor="end"
           >
             {u}
@@ -83,23 +84,22 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
           row.map((val, c) => {
             const isDiag = r === c;
             const hasConsol = consolOverlay && !isDiag && consolOverlay[r]?.[c] === 1;
-            let fill = "#f8fafc";
+            let fill = "#ffffff";
             if (isDiag) {
-              fill = "#d1d5db";
+              fill = "#e0e0e0";
             } else if (consolOverlay) {
               // Combined mode: blue fill for consolidation, white for no consolidation
-              fill = hasConsol ? "#668fd9" : "#ffffff";
+              fill = hasConsol ? "#668fa9" : "#ffffff";
             } else if (binary) {
-              fill = val === 1 ? "#668fd9" : "#f8fafc";
+              fill = val === 1 ? "#668fa9" : "#ffffff";
             } else {
               // Frequency-only mode: color gradient
               if (val > 0) fill = freqColor(val, maxVal);
             }
 
-            // Text color: white on blue, dark on white
-            const textColor = hasConsol || (binary && val === 1) ? "#ffffff"
-              : (!binary && !consolOverlay && val / maxVal > 0.5) ? "#ffffff"
-              : "#333333";
+            // Text color: white on blue, #333333 on white (matching matplotlib)
+            const onBlue = hasConsol || (binary && val === 1) || (!binary && !consolOverlay && val / maxVal > 0.5);
+            const textColor = onBlue ? "#ffffff" : "#333333";
 
             return (
               <g key={`${r}-${c}`}>
@@ -109,8 +109,8 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
                   width={cellSize}
                   height={cellSize}
                   fill={fill}
-                  stroke="#e5e7eb"
-                  strokeWidth={0.5}
+                  stroke="#f0f0f0"
+                  strokeWidth={0.25}
                 />
                 {!isDiag && !binary && val > 0 && cellSize >= 18 && (
                   <text
@@ -185,7 +185,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
       <div className="flex justify-center items-center gap-1 mt-3 text-xs text-gray-500">
         {binary || consolOverlay ? (
           <>
-            <div className="w-4 h-3 rounded-sm" style={{ background: "#668fd9" }} />
+            <div className="w-4 h-3 rounded-sm" style={{ background: "#668fa9" }} />
             <span>Consolidation potential</span>
             <div className="w-4 h-3 bg-white border border-gray-300 rounded-sm ml-2" />
             <span>No consolidation potential</span>
