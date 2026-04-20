@@ -54,6 +54,7 @@ interface AppState {
 
   // Sensitivity
   sensitivityType: "importance" | "robustness" | "sweep" | null;
+  sensitivityProgress: { label: string; run: number; total: number; fitness: number }[];
   sensitivityResult: {
     importances?: Record<string, number>;
     source?: string;
@@ -77,6 +78,7 @@ type Action =
   | { type: "done"; result: AppState["result"] }
   | { type: "error"; message: string }
   | { type: "cancelled" }
+  | { type: "sensitivityProgress"; label: string; run: number; total: number; fitness: number }
   | { type: "sensitivityDone"; sensitivityType: "importance" | "robustness" | "sweep"; result: AppState["sensitivityResult"] }
   | { type: "reset" }
   | { type: "replaceFile"; which: "freq" | "consol"; file: FileInfo; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
@@ -140,13 +142,15 @@ function reducer(state: AppState, action: Action): AppState {
     case "setOptunaParam":
       return { ...state, optunaParams: { ...state.optunaParams, [action.field]: action.value } };
     case "start":
-      return { ...state, status: "running", runId: action.runId, progressData: [], trialData: [], result: null, error: null, phase: "idle" };
+      return { ...state, status: "running", runId: action.runId, progressData: [], trialData: [], sensitivityProgress: [], result: null, error: null, phase: "idle" };
     case "phase":
       return { ...state, phase: action.phase };
     case "progress":
       return { ...state, progressData: [...state.progressData, action.point] };
     case "trial":
       return { ...state, trialData: [...state.trialData, action.point] };
+    case "sensitivityProgress":
+      return { ...state, sensitivityProgress: [...state.sensitivityProgress, { label: action.label, run: action.run, total: action.total, fitness: action.fitness }] };
     case "done":
       return { ...state, status: "done", result: action.result };
     case "sensitivityDone":
@@ -156,7 +160,7 @@ function reducer(state: AppState, action: Action): AppState {
     case "cancelled":
       return { ...state, status: "cancelled" };
     case "reset":
-      return { ...state, status: "idle", runId: null, phase: "idle", progressData: [], trialData: [], result: null, error: null, sensitivityType: null, sensitivityResult: null };
+      return { ...state, status: "idle", runId: null, phase: "idle", progressData: [], trialData: [], sensitivityProgress: [], result: null, error: null, sensitivityType: null, sensitivityResult: null };
   }
 }
 
@@ -169,7 +173,7 @@ const initialState: AppState = {
   gaParams: { ...defaultGaParams },
   optunaParams: { ...defaultOptunaParams },
   status: "idle", runId: null, phase: "idle",
-  progressData: [], trialData: [],
+  progressData: [], trialData: [], sensitivityProgress: [],
   result: null, error: null,
   sensitivityType: null, sensitivityResult: null,
 };
@@ -506,10 +510,10 @@ export default function App() {
           dispatch({ type: "trial", point: { trial: evt.trial, value: evt.value, best: evt.best } });
           break;
         case "run_progress":
-          dispatch({ type: "progress", point: { gen: evt.run, avg: evt.fitness, min: evt.fitness, max: evt.fitness } });
+          dispatch({ type: "sensitivityProgress", label: `Run ${evt.run}/${evt.total}`, run: evt.run, total: evt.total, fitness: evt.fitness });
           break;
         case "sweep_progress":
-          dispatch({ type: "progress", point: { gen: evt.step, avg: evt.fitness, min: evt.value, max: evt.n_clusters } });
+          dispatch({ type: "sensitivityProgress", label: `${evt.weight} step ${evt.step}/${evt.total_steps}`, run: evt.step, total: evt.total_steps, fitness: evt.fitness });
           break;
         case "done":
           dispatch({
@@ -617,6 +621,7 @@ export default function App() {
           result={s.result}
           error={s.error}
           sensitivityType={s.sensitivityType}
+          sensitivityProgress={s.sensitivityProgress}
           sensitivityResult={s.sensitivityResult}
         />
       </main>

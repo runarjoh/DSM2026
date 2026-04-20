@@ -32,6 +32,13 @@ interface SensitivityResult {
   logPath?: string;
 }
 
+interface SensitivityProgressPoint {
+  label: string;
+  run: number;
+  total: number;
+  fitness: number;
+}
+
 interface Props {
   status: "idle" | "running" | "done" | "error" | "cancelled";
   phase: "idle" | "tune" | "optimize";
@@ -40,11 +47,12 @@ interface Props {
   result: ResultData | null;
   error: string | null;
   sensitivityType?: "importance" | "robustness" | "sweep" | null;
+  sensitivityProgress?: SensitivityProgressPoint[];
   sensitivityResult?: SensitivityResult | null;
 }
 
-export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityResult }: Props) {
-  const hasData = progressData.length > 0 || trialData.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
+export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult }: Props) {
+  const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (
     <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!hasData ? "opacity-50" : ""}`}>
@@ -58,6 +66,21 @@ export default function Results({ status, phase, progressData, trialData, result
         )}
         {status === "running" && phase === "optimize" && (
           <span className="text-xs text-blue-600 font-medium ml-2">Phase 2: Optimizing</span>
+        )}
+        {status === "running" && sensitivityType === "importance" && (
+          <span className="text-xs text-blue-600 font-medium ml-2">
+            Running importance analysis{trialData.length > 0 ? ` — ${trialData.length} trials` : ""}
+          </span>
+        )}
+        {status === "running" && sensitivityType === "robustness" && sensitivityProgress.length > 0 && (
+          <span className="text-xs text-blue-600 font-medium ml-2">
+            Robustness — {sensitivityProgress[sensitivityProgress.length - 1].label}
+          </span>
+        )}
+        {status === "running" && sensitivityType === "sweep" && sensitivityProgress.length > 0 && (
+          <span className="text-xs text-blue-600 font-medium ml-2">
+            Sweep — {sensitivityProgress[sensitivityProgress.length - 1].label}
+          </span>
         )}
         {status === "done" && result?.fitness != null && (
           <span className="text-xs text-green-600 font-medium ml-auto">
@@ -109,6 +132,28 @@ export default function Results({ status, phase, progressData, trialData, result
               <Line type="monotone" dataKey="min" stroke="#ef4444" dot={false} name="Minimum" />
               <Line type="monotone" dataKey="max" stroke="#22c55e" dot={false} name="Maximum" />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Sensitivity progress (robustness / sweep) */}
+      {sensitivityProgress.length > 0 && !sensitivityResult && (sensitivityType === "robustness" || sensitivityType === "sweep") && (
+        <div className="mb-4">
+          <div className="text-xs font-semibold text-gray-500 mb-2">
+            {sensitivityType === "robustness" ? "Robustness Runs" : "Weight Sweep"} — {sensitivityProgress.length} / {sensitivityProgress[sensitivityProgress.length - 1].total} completed
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={sensitivityProgress.map((p, i) => ({ index: i + 1, fitness: p.fitness, label: p.label }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="index" label={{ value: sensitivityType === "robustness" ? "Run" : "Step", position: "insideBottom", offset: -5 }} />
+              <YAxis label={{ value: "Fitness", angle: -90, position: "insideLeft" }} />
+              <Tooltip content={({ payload }) => {
+                if (!payload?.[0]) return null;
+                const d = payload[0].payload as { label: string; fitness: number };
+                return <div className="bg-white border border-gray-200 rounded p-2 text-xs shadow"><div className="font-medium">{d.label}</div><div>Fitness: {d.fitness.toFixed(2)}</div></div>;
+              }} />
+              <Bar dataKey="fitness" fill={sensitivityType === "robustness" ? "#6366f1" : "#3b82f6"} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       )}
