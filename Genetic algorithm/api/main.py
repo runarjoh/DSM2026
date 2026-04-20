@@ -19,7 +19,7 @@ from api.models import (
     InitConfigRequest,
     UploadResponse,
 )
-from api.routes import optimize, tune, tune_optimize, visualize
+from api.routes import optimize, sensitivity, tune, tune_optimize, visualize
 from api.state import run_manager
 from services.config import AppConfig, config_to_dict, init_config, load_config
 
@@ -66,6 +66,7 @@ app.include_router(optimize.router)
 app.include_router(tune.router)
 app.include_router(tune_optimize.router)
 app.include_router(visualize.router)
+app.include_router(sensitivity.router)
 
 
 # ---------------------------------------------------------------------------
