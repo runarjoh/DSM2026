@@ -79,6 +79,69 @@ export default function ConfigureRun({
         </button>
       </div>
 
+      {/* Fitness function selector — always visible */}
+      <div className="flex items-center gap-3 mb-3">
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Fitness function</span>
+          <select
+            className="rounded border-gray-300 border px-2 py-1 text-sm"
+            value={gaParams.fitness_mode || "classic"}
+            onChange={(e) => onGaParam("fitness_mode", e.target.value)}
+            disabled={disabled}
+          >
+            <option value="classic">Type 3 only</option>
+            <option value="mdl_pure">Type 3 + Type 4 errors</option>
+          </select>
+        </label>
+      </div>
+
+      {/* Fitness formula display */}
+      <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
+        <div className="text-xs font-semibold text-gray-500 mb-1">Fitness formula</div>
+        {(gaParams.fitness_mode || "classic") === "classic" ? (
+          <div className="text-xs text-gray-600 font-mono leading-relaxed">
+            <span className="text-gray-400">f = </span>
+            <span>(1-{"\u03B1"}-{"\u03B2"}-{"\u03B3"}-{"\u03B4"})</span>
+            <span className="text-gray-400"> · </span><span>MDL</span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B1"}</span>
+            <span className="text-gray-400"> · </span><span>S1<sub>cross-boundary</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B2"}</span>
+            <span className="text-gray-400"> · </span><span>S2<sub>missing-within</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B3"}</span>
+            <span className="text-gray-400"> · </span><span>S3<sub>consol-omission</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B4"}</span>
+            <span className="text-gray-400"> · </span><span>SizeImbalance</span>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-600 font-mono leading-relaxed">
+            <span className="text-gray-400">f = </span>
+            <span>(1-{"\u03B1"}-{"\u03B2"}-{"\u03B3"}-{"\u03B4"})</span>
+            <span className="text-gray-400"> · </span><span>MDL</span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B1"}</span>
+            <span className="text-gray-400"> · </span><span>S1<sub>cross-boundary</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B2"}</span>
+            <span className="text-gray-400"> · </span><span>S2<sub>missing-within</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B3"}</span>
+            <span className="text-gray-400"> · </span><span>S3<sub>consol-omission</sub></span>
+            <span className="text-gray-400"> + </span>
+            <span className="text-blue-600">{"\u03B4"}</span>
+            <span className="text-gray-400"> · </span><span>S4<sub>consol-overreach</sub></span>
+          </div>
+        )}
+        <div className="text-xs text-gray-400 mt-1">
+          {(gaParams.fitness_mode || "classic") === "classic"
+            ? "S1-S3 scaled by 2\u00B7log\u2082(n+1). Size imbalance = \u2211(cluster_size - ideal_size)\u00B2 / target_clusters."
+            : "All error terms scaled by 2\u00B7log\u2082(n+1). S4 counts within-cluster pairs with no consolidation potential."}
+        </div>
+      </div>
+
       {/* GA params — shown for Optimize mode */}
       {mode === "optimize" && (
         <div className="mb-4">
@@ -108,65 +171,6 @@ export default function ConfigureRun({
                 <option value="directional">Directional (count both cells)</option>
               </select>
             </label>
-            <label className="block">
-              <span className="text-xs text-gray-500">Fitness function</span>
-              <select
-                className="mt-1 block w-full rounded border-gray-300 border px-2 py-1 text-sm"
-                value={gaParams.fitness_mode || "classic"}
-                onChange={(e) => onGaParam("fitness_mode", e.target.value)}
-                disabled={disabled}
-              >
-                <option value="classic">Classic (size imbalance)</option>
-                <option value="mdl_pure">MDL Pure (Type IV errors)</option>
-              </select>
-            </label>
-          </div>
-
-          {/* Fitness formula display */}
-          <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
-            <div className="text-xs font-semibold text-gray-500 mb-1">Fitness formula</div>
-            {(gaParams.fitness_mode || "classic") === "classic" ? (
-              <div className="text-xs text-gray-600 font-mono leading-relaxed">
-                <span className="text-gray-400">f = </span>
-                <span>(1-{"\u03B1"}-{"\u03B2"}-{"\u03B3"}-{"\u03B4"})</span>
-                <span className="text-gray-400"> · </span><span>MDL</span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B1"}</span>
-                <span className="text-gray-400"> · </span><span>S1<sub>cross-boundary</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B2"}</span>
-                <span className="text-gray-400"> · </span><span>S2<sub>missing-within</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B3"}</span>
-                <span className="text-gray-400"> · </span><span>S3<sub>consol-omission</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B4"}</span>
-                <span className="text-gray-400"> · </span><span>SizeImbalance</span>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-600 font-mono leading-relaxed">
-                <span className="text-gray-400">f = </span>
-                <span>(1-{"\u03B1"}-{"\u03B2"}-{"\u03B3"}-{"\u03B4"})</span>
-                <span className="text-gray-400"> · </span><span>MDL</span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B1"}</span>
-                <span className="text-gray-400"> · </span><span>S1<sub>cross-boundary</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B2"}</span>
-                <span className="text-gray-400"> · </span><span>S2<sub>missing-within</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B3"}</span>
-                <span className="text-gray-400"> · </span><span>S3<sub>consol-omission</sub></span>
-                <span className="text-gray-400"> + </span>
-                <span className="text-blue-600">{"\u03B4"}</span>
-                <span className="text-gray-400"> · </span><span>S4<sub>consol-overreach</sub></span>
-              </div>
-            )}
-            <div className="text-xs text-gray-400 mt-1">
-              {(gaParams.fitness_mode || "classic") === "classic"
-                ? "S1-S3 scaled by 2·log\u2082(n+1). Size imbalance = \u2211(cluster_size - ideal_size)\u00B2 / target_clusters."
-                : "All error terms scaled by 2·log\u2082(n+1). S4 counts within-cluster pairs with no consolidation potential."}
-            </div>
           </div>
         </div>
       )}
