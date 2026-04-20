@@ -12,9 +12,95 @@ import numpy as np
 import optuna
 from sklearn.metrics import adjusted_rand_score
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 from dsm_ga import CancelledError, GAConfig, run_ga
 from services.config import AppConfig
 from services.optuna_runner import build_trial_config, run_optuna
+
+
+# ---------------------------------------------------------------------------
+# Chart helpers
+# ---------------------------------------------------------------------------
+
+def _save_importance_chart(importances: dict[str, float], path: Path) -> None:
+    """Save a horizontal bar chart of parameter importances."""
+    sorted_items = sorted(importances.items(), key=lambda x: x[1])
+    names = [k for k, _ in sorted_items]
+    values = [v for _, v in sorted_items]
+
+    fig, ax = plt.subplots(figsize=(8, max(3, len(names) * 0.5)))
+    ax.barh(names, values, color="#3b82f6")
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Importance (fANOVA)")
+    ax.set_title("Parameter Importance")
+    for i, v in enumerate(values):
+        ax.text(v + 0.01, i, f"{v:.3f}", va="center", fontsize=8)
+    plt.tight_layout()
+    fig.savefig(str(path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def _save_robustness_chart(runs: list[dict], stats: dict, path: Path) -> None:
+    """Save a bar chart of per-run fitness with mean/std annotation."""
+    run_nums = list(range(1, len(runs) + 1))
+    fitnesses = [r["fitness"] for r in runs]
+
+    fig, ax = plt.subplots(figsize=(max(6, len(runs) * 0.8), 4))
+    bars = ax.bar(run_nums, fitnesses, color="#6366f1", width=0.6)
+    ax.axhline(stats["mean_fitness"], color="#ef4444", linestyle="--", linewidth=1.5, label=f"Mean: {stats['mean_fitness']:.2f}")
+    ax.fill_between(
+        [0.5, len(runs) + 0.5],
+        stats["mean_fitness"] - stats["std_fitness"],
+        stats["mean_fitness"] + stats["std_fitness"],
+        alpha=0.15, color="#ef4444", label=f"Std: {stats['std_fitness']:.2f}",
+    )
+    ax.set_xlabel("Run")
+    ax.set_ylabel("Fitness")
+    ax.set_title(f"Robustness Analysis — {len(runs)} runs  |  ARI mean: {stats['ari_mean']:.4f}")
+    ax.set_xticks(run_nums)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    fig.savefig(str(path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def _save_sweep_chart(sweeps: dict[str, list[dict]], path: Path) -> None:
+    """Save a 2x2 grid of weight sweep line charts."""
+    weight_names = [w for w in ("alpha", "beta", "gamma", "delta") if w in sweeps]
+    n = len(weight_names)
+    cols = min(n, 2)
+    rows = (n + 1) // 2
+
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
+    for idx, wname in enumerate(weight_names):
+        ax = axes[idx // cols][idx % cols]
+        data = sweeps[wname]
+        values = [d["value"] for d in data]
+        fitnesses = [d["fitness"] for d in data]
+        clusters = [d["n_clusters"] for d in data]
+
+        ax.plot(values, fitnesses, "o-", color="#3b82f6", linewidth=1.5, markersize=4, label="Fitness")
+        ax.set_xlabel(wname)
+        ax.set_ylabel("Fitness", color="#3b82f6")
+        ax.tick_params(axis="y", labelcolor="#3b82f6")
+
+        ax2 = ax.twinx()
+        ax2.plot(values, clusters, "s--", color="#f97316", linewidth=1, markersize=3, label="Clusters")
+        ax2.set_ylabel("Clusters", color="#f97316")
+        ax2.tick_params(axis="y", labelcolor="#f97316")
+
+        ax.set_title(f"Sweep: {wname}")
+
+    # Hide unused subplots
+    for idx in range(n, rows * cols):
+        axes[idx // cols][idx % cols].set_visible(False)
+
+    plt.tight_layout()
+    fig.savefig(str(path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +177,7 @@ def run_importance(
             )
         with open(p / "summary.json", "w", encoding="utf-8") as f:
             json.dump({"importances": importances, "source": source}, f, indent=2)
+        _save_importance_chart(importances, p / "importance.png")
 
     return importances, source, study
 
@@ -186,6 +273,7 @@ def run_robustness(
         summary = {k: v for k, v in result.items() if k != "runs"}
         with open(p / "summary.json", "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)
+        _save_robustness_chart(runs, result, p / "robustness.png")
 
     return result
 
@@ -281,5 +369,6 @@ def run_weight_sweep(
                 f,
                 indent=2,
             )
+        _save_sweep_chart(sweeps, p / "sweep.png")
 
     return result
