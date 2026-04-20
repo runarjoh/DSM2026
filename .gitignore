@@ -38,4 +38,5 @@ Genetic algorithm/docs/superpowers/
 # Generated output
 results/
 uploads/
+sensitivity_runs/
 *.png

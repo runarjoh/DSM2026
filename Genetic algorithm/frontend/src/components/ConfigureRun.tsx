@@ -1,17 +1,20 @@
+import SensitivityPanel from "./SensitivityPanel";
+
 interface Props {
-  mode: "optimize" | "tune";
+  mode: "optimize" | "tune" | "sensitivity";
   runAfterTune: boolean;
   gaParams: Record<string, string>;
   optunaParams: Record<string, string>;
   status: "idle" | "running" | "done" | "error" | "cancelled";
   dataReady: boolean;
-  onModeChange: (mode: "optimize" | "tune") => void;
+  onModeChange: (mode: "optimize" | "tune" | "sensitivity") => void;
   onRunAfterTuneChange: (v: boolean) => void;
   onGaParam: (field: string, value: string) => void;
   onOptunaParam: (field: string, value: string) => void;
   onRun: () => void;
   onCancel: () => void;
   onReset: () => void;
+  onSensitivityRun: (type: "importance" | "robustness" | "sweep", config: Record<string, number | string>) => void;
 }
 
 const gaFields = [
@@ -37,7 +40,7 @@ const optunaFields = [
 
 export default function ConfigureRun({
   mode, runAfterTune, gaParams, optunaParams, status, dataReady,
-  onModeChange, onRunAfterTuneChange, onGaParam, onOptunaParam, onRun, onCancel, onReset,
+  onModeChange, onRunAfterTuneChange, onGaParam, onOptunaParam, onRun, onCancel, onReset, onSensitivityRun,
 }: Props) {
   const running = status === "running";
   const disabled = !dataReady || running;
@@ -52,7 +55,7 @@ export default function ConfigureRun({
       </div>
 
       {/* Mode toggle */}
-      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 mb-4 max-w-xs">
+      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 mb-4 max-w-md">
         <button
           className={`flex-1 text-sm py-2 rounded-md font-medium ${mode === "optimize" ? "bg-blue-600 text-white" : "text-gray-500"}`}
           onClick={() => onModeChange("optimize")}
@@ -66,6 +69,13 @@ export default function ConfigureRun({
           disabled={running}
         >
           Tune Parameters
+        </button>
+        <button
+          className={`flex-1 text-sm py-2 rounded-md font-medium ${mode === "sensitivity" ? "bg-blue-600 text-white" : "text-gray-500"}`}
+          onClick={() => onModeChange("sensitivity")}
+          disabled={running}
+        >
+          Sensitivity
         </button>
       </div>
 
@@ -100,6 +110,16 @@ export default function ConfigureRun({
             </label>
           </div>
         </div>
+      )}
+
+      {/* Sensitivity — shown for Sensitivity mode */}
+      {mode === "sensitivity" && (
+        <SensitivityPanel
+          status={status}
+          dataReady={dataReady}
+          onRun={onSensitivityRun}
+          onCancel={onCancel}
+        />
       )}
 
       {/* Optuna params — shown for Tune mode */}
@@ -148,32 +168,44 @@ export default function ConfigureRun({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-3 items-center">
-        <button
-          className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          onClick={onRun}
-          disabled={disabled}
-        >
-          {running ? "Running..." : mode === "optimize" ? "Run Optimization" : "Start Tuning"}
-        </button>
-        {running && (
+      {/* Action buttons — hidden in sensitivity mode (has its own buttons) */}
+      {mode !== "sensitivity" && (
+        <div className="flex gap-3 items-center">
           <button
-            className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
-            onClick={onCancel}
+            className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            onClick={onRun}
+            disabled={disabled}
           >
-            Cancel
+            {running ? "Running..." : mode === "optimize" ? "Run Optimization" : "Start Tuning"}
           </button>
-        )}
-        {status !== "idle" && !running && (
+          {running && (
+            <button
+              className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          )}
+          {status !== "idle" && !running && (
+            <button
+              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300"
+              onClick={onReset}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      )}
+      {mode === "sensitivity" && status !== "idle" && status !== "running" && (
+        <div className="flex gap-3 items-center">
           <button
             className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300"
             onClick={onReset}
           >
             Reset
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

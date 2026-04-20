@@ -33,7 +33,7 @@ interface AppState {
   dataError: string | null;
 
   // Run config
-  mode: "optimize" | "tune";
+  mode: "optimize" | "tune" | "sensitivity";
   runAfterTune: boolean;
   gaParams: Record<string, string>;
   optunaParams: Record<string, string>;
@@ -51,12 +51,22 @@ interface AppState {
     bestParams?: Record<string, number | string>;
   } | null;
   error: string | null;
+
+  // Sensitivity
+  sensitivityType: "importance" | "robustness" | "sweep" | null;
+  sensitivityResult: {
+    importances?: Record<string, number>;
+    source?: string;
+    robustness?: { runs: {run: number; fitness: number}[]; meanFitness: number; stdFitness: number; minFitness: number; maxFitness: number; ariMean: number };
+    sweeps?: Record<string, {value: number; fitness: number; nClusters: number}[]>;
+    logPath?: string;
+  } | null;
 }
 
 type Action =
   | { type: "setData"; freqFile: FileInfo; consolFile: FileInfo; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
   | { type: "dataError"; message: string }
-  | { type: "setMode"; mode: "optimize" | "tune" }
+  | { type: "setMode"; mode: "optimize" | "tune" | "sensitivity" }
   | { type: "setRunAfterTune"; value: boolean }
   | { type: "setGaParam"; field: string; value: string }
   | { type: "setOptunaParam"; field: string; value: string }
@@ -67,6 +77,7 @@ type Action =
   | { type: "done"; result: AppState["result"] }
   | { type: "error"; message: string }
   | { type: "cancelled" }
+  | { type: "sensitivityDone"; sensitivityType: "importance" | "robustness" | "sweep"; result: AppState["sensitivityResult"] }
   | { type: "reset" }
   | { type: "replaceFile"; which: "freq" | "consol"; file: FileInfo; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
   | { type: "setGrouping"; file: { name: string }; groups: number[]; freqMatrix: number[][]; consolMatrix: number[][]; units: string[] }
@@ -138,12 +149,14 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, trialData: [...state.trialData, action.point] };
     case "done":
       return { ...state, status: "done", result: action.result };
+    case "sensitivityDone":
+      return { ...state, status: "done", sensitivityType: action.sensitivityType, sensitivityResult: action.result };
     case "error":
       return { ...state, status: "error", error: action.message };
     case "cancelled":
       return { ...state, status: "cancelled" };
     case "reset":
-      return { ...state, status: "idle", runId: null, phase: "idle", progressData: [], trialData: [], result: null, error: null };
+      return { ...state, status: "idle", runId: null, phase: "idle", progressData: [], trialData: [], result: null, error: null, sensitivityType: null, sensitivityResult: null };
   }
 }
 
@@ -158,6 +171,7 @@ const initialState: AppState = {
   status: "idle", runId: null, phase: "idle",
   progressData: [], trialData: [],
   result: null, error: null,
+  sensitivityType: null, sensitivityResult: null,
 };
 
 export default function App() {
@@ -448,9 +462,99 @@ export default function App() {
     };
   }
 
+  async function startSensitivity(type: "importance" | "robustness" | "sweep", config: Record<string, number | string>) {
+    try {
+      const freqPath = s.freqFile?.path || "";
+      const consolPath = s.consolFile?.path || "";
+
+      // Build GA overrides from current form params
+      const ga: Record<string, number | string> = {};
+      const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
+      const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
+      floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
+      intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
+      ga.consolidation_mode = s.gaParams.consolidation_mode;
+
+      const body: Record<string, unknown> = { ...config, ga, freq_csv: freqPath, consol_csv: consolPath };
+
+      const res = await fetch(`/api/sensitivity/${type}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        dispatch({ type: "error", message: err.detail || "Failed to start" });
+        return;
+      }
+      const { run_id } = await res.json();
+      dispatch({ type: "start", runId: run_id });
+      connectSensitivitySSE(`/api/sensitivity/${type}/${run_id}/stream`, type);
+    } catch (e: unknown) {
+      dispatch({ type: "error", message: e instanceof Error ? e.message : "Failed to connect" });
+    }
+  }
+
+  function connectSensitivitySSE(url: string, type: "importance" | "robustness" | "sweep") {
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onmessage = (e) => {
+      const evt = JSON.parse(e.data);
+      switch (evt.type) {
+        case "trial":
+          dispatch({ type: "trial", point: { trial: evt.trial, value: evt.value, best: evt.best } });
+          break;
+        case "run_progress":
+          dispatch({ type: "progress", point: { gen: evt.run, avg: evt.fitness, min: evt.fitness, max: evt.fitness } });
+          break;
+        case "sweep_progress":
+          dispatch({ type: "progress", point: { gen: evt.step, avg: evt.fitness, min: evt.value, max: evt.n_clusters } });
+          break;
+        case "done":
+          dispatch({
+            type: "sensitivityDone",
+            sensitivityType: type,
+            result: {
+              importances: evt.importances,
+              source: evt.source,
+              robustness: evt.mean_fitness != null ? {
+                runs: evt.runs || [],
+                meanFitness: evt.mean_fitness,
+                stdFitness: evt.std_fitness,
+                minFitness: evt.min_fitness,
+                maxFitness: evt.max_fitness,
+                ariMean: evt.ari_mean,
+              } : undefined,
+              sweeps: evt.sweeps,
+              logPath: evt.log_path,
+            },
+          });
+          es.close();
+          break;
+        case "error":
+          dispatch({ type: "error", message: evt.message });
+          es.close();
+          break;
+        case "cancelled":
+          dispatch({ type: "cancelled" });
+          es.close();
+          break;
+      }
+    };
+
+    es.onerror = () => {
+      dispatch({ type: "error", message: "Connection lost" });
+      es.close();
+    };
+  }
+
   async function cancelRun() {
     if (!s.runId) return;
-    const endpoint = s.mode === "optimize" ? "optimize" : s.runAfterTune ? "tune-optimize" : "tune";
+    let endpoint: string;
+    if (s.mode === "optimize") endpoint = "optimize";
+    else if (s.mode === "sensitivity" && s.sensitivityType) endpoint = `sensitivity/${s.sensitivityType}`;
+    else endpoint = s.runAfterTune ? "tune-optimize" : "tune";
     await fetch(`/api/${endpoint}/${s.runId}/cancel`, { method: "POST" });
   }
 
@@ -501,6 +605,7 @@ export default function App() {
           onRun={startRun}
           onCancel={cancelRun}
           onReset={() => dispatch({ type: "reset" })}
+          onSensitivityRun={startSensitivity}
         />
 
         {/* Section 4: Results */}
@@ -511,6 +616,8 @@ export default function App() {
           trialData={s.trialData}
           result={s.result}
           error={s.error}
+          sensitivityType={s.sensitivityType}
+          sensitivityResult={s.sensitivityResult}
         />
       </main>
     </div>

@@ -1,6 +1,7 @@
 import {
   LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar,
 } from "recharts";
 
 interface ProgressPoint {
@@ -23,6 +24,14 @@ interface ResultData {
   bestParams?: Record<string, number | string>;
 }
 
+interface SensitivityResult {
+  importances?: Record<string, number>;
+  source?: string;
+  robustness?: { runs: {run: number; fitness: number}[]; meanFitness: number; stdFitness: number; minFitness: number; maxFitness: number; ariMean: number };
+  sweeps?: Record<string, {value: number; fitness: number; nClusters: number}[]>;
+  logPath?: string;
+}
+
 interface Props {
   status: "idle" | "running" | "done" | "error" | "cancelled";
   phase: "idle" | "tune" | "optimize";
@@ -30,10 +39,12 @@ interface Props {
   trialData: TrialPoint[];
   result: ResultData | null;
   error: string | null;
+  sensitivityType?: "importance" | "robustness" | "sweep" | null;
+  sensitivityResult?: SensitivityResult | null;
 }
 
-export default function Results({ status, phase, progressData, trialData, result, error }: Props) {
-  const hasData = progressData.length > 0 || trialData.length > 0 || status === "done" || status === "error" || status === "cancelled";
+export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityResult }: Props) {
+  const hasData = progressData.length > 0 || trialData.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (
     <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!hasData ? "opacity-50" : ""}`}>
@@ -153,6 +164,77 @@ export default function Results({ status, phase, progressData, trialData, result
               </a>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Sensitivity results */}
+      {status === "done" && sensitivityResult && (
+        <div className="border-t border-gray-200 pt-4 mt-2">
+          {/* Importance */}
+          {sensitivityType === "importance" && sensitivityResult.importances && (
+            <div className="mb-4">
+              <div className="text-xs font-semibold text-gray-500 mb-1">
+                Parameter Importance (fANOVA) — {sensitivityResult.source === "reused" ? "from previous tuning" : "from dedicated study"}
+              </div>
+              <ResponsiveContainer width="100%" height={Math.max(200, Object.keys(sensitivityResult.importances).length * 35)}>
+                <BarChart data={Object.entries(sensitivityResult.importances).map(([k, v]) => ({name: k, importance: v})).sort((a, b) => b.importance - a.importance)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" domain={[0, 1]} />
+                  <YAxis type="category" dataKey="name" width={120} tick={{fontSize: 11}} />
+                  <Tooltip />
+                  <Bar dataKey="importance" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Robustness */}
+          {sensitivityType === "robustness" && sensitivityResult.robustness && (
+            <div className="mb-4">
+              <div className="text-xs font-semibold text-gray-500 mb-2">Robustness Analysis</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                <div className="text-sm"><span className="text-gray-500">Mean:</span> <span className="font-mono">{sensitivityResult.robustness.meanFitness.toFixed(2)}</span></div>
+                <div className="text-sm"><span className="text-gray-500">Std:</span> <span className="font-mono">{sensitivityResult.robustness.stdFitness.toFixed(2)}</span></div>
+                <div className="text-sm"><span className="text-gray-500">Min:</span> <span className="font-mono">{sensitivityResult.robustness.minFitness.toFixed(2)}</span></div>
+                <div className="text-sm"><span className="text-gray-500">Max:</span> <span className="font-mono">{sensitivityResult.robustness.maxFitness.toFixed(2)}</span></div>
+              </div>
+              <div className="text-sm mb-3"><span className="text-gray-500">Mean ARI (cluster stability):</span> <span className="font-mono">{sensitivityResult.robustness.ariMean.toFixed(4)}</span></div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={sensitivityResult.robustness.runs}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="run" label={{value: "Run", position: "insideBottom", offset: -5}} />
+                  <YAxis label={{value: "Fitness", angle: -90, position: "insideLeft"}} />
+                  <Tooltip />
+                  <Bar dataKey="fitness" fill="#6366f1" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Sweep */}
+          {sensitivityType === "sweep" && sensitivityResult.sweeps && (
+            <div className="mb-4">
+              <div className="text-xs font-semibold text-gray-500 mb-2">Weight Sensitivity Sweep</div>
+              {Object.entries(sensitivityResult.sweeps).map(([weight, data]) => (
+                <div key={weight} className="mb-4">
+                  <div className="text-xs font-medium text-gray-600 mb-1">{weight}</div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={data}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="value" label={{value: weight, position: "insideBottom", offset: -5}} tickFormatter={(v: number) => v.toFixed(2)} />
+                      <YAxis label={{value: "Fitness", angle: -90, position: "insideLeft"}} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="fitness" stroke="#3b82f6" dot={{r: 3}} name="Fitness" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sensitivityResult.logPath && (
+            <div className="text-xs text-gray-400 mt-2">Results saved to: {sensitivityResult.logPath}</div>
+          )}
         </div>
       )}
 
