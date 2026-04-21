@@ -253,6 +253,24 @@ export default function App() {
             units: mat.units,
           });
         }
+        // Load latest result if available
+        try {
+          const resRes = await fetch("/api/latest-result");
+          if (resRes.ok) {
+            const lr = await resRes.json();
+            dispatch({
+              type: "done",
+              result: {
+                resultPath: lr.result_path,
+                figurePath: lr.figure_path,
+                resultFreq: lr.result_freq,
+                resultConsol: lr.result_consol,
+                resultUnits: lr.result_units,
+                resultGroups: lr.result_groups,
+              },
+            });
+          }
+        } catch { /* no previous result — that's fine */ }
       } catch (e: unknown) {
         dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Failed to load" });
       }

@@ -167,6 +167,47 @@ async def parse_grouping(file: UploadFile):
     return {"units": units, "clusters": clusters}
 
 
+@app.get("/api/latest-result")
+def latest_result():
+    """Return the most recent optimization result with matrix data for rendering."""
+    import pandas as pd
+
+    cfg = get_app_config()
+    output_dir = Path(cfg.data.output_dir)
+    if not output_dir.is_dir():
+        raise HTTPException(404, "No results directory")
+
+    # Find most recent xlsx result file
+    xlsx_files = sorted(output_dir.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if not xlsx_files:
+        raise HTTPException(404, "No results found")
+
+    latest = xlsx_files[0]
+    try:
+        freq_df = pd.read_excel(str(latest), sheet_name="dsm_optimized", index_col=0)
+        consol_df = pd.read_excel(str(latest), sheet_name="dsm_consolidation", index_col=0)
+        grouping_df = pd.read_excel(str(latest), sheet_name="grouping")
+    except Exception as e:
+        raise HTTPException(400, f"Failed to read result file: {e}")
+
+    units = freq_df.index.tolist()
+    clusters = [int(str(c).replace("Cluster ", "")) for c in grouping_df["Cluster"]]
+
+    # Find matching figure
+    fig_name = latest.stem + ".png"
+    fig_path = fig_name if (output_dir / fig_name).is_file() else None
+
+    return {
+        "result_freq": freq_df.values.tolist(),
+        "result_consol": consol_df.values.tolist(),
+        "result_units": units,
+        "result_groups": clusters,
+        "result_path": latest.name,
+        "figure_path": fig_path,
+        "filename": latest.name,
+    }
+
+
 @app.post("/api/config/save")
 def save_config(req: ConfigSaveRequest | None = None):
     cfg = get_app_config()
