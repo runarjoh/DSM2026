@@ -9,8 +9,8 @@ interface Props {
 }
 
 const FREQ_COLORS = [
-  "#eff6ff", "#dbeafe", "#bfdbfe", "#93c5fd",
-  "#60a5fa", "#3b82f6", "#2563eb", "#1d4ed8",
+  "#EEEFFE", "#D8DCFC", "#B5BCF7", "#919CF2",
+  "#6E7DED", "#5B6EF7", "#3B4FE4", "#2D3DB8",
 ];
 
 function freqColor(value: number, max: number): string {
@@ -89,9 +89,9 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
               fill = "#e0e0e0";
             } else if (consolOverlay) {
               // Combined mode: blue fill for consolidation, white for no consolidation
-              fill = hasConsol ? "#668fa9" : "#ffffff";
+              fill = hasConsol ? "#3B4FE4" : "#ffffff";
             } else if (binary) {
-              fill = val === 1 ? "#668fa9" : "#ffffff";
+              fill = val === 1 ? "#3B4FE4" : "#ffffff";
             } else {
               // Frequency-only mode: color gradient
               if (val > 0) fill = freqColor(val, maxVal);
@@ -185,7 +185,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
       <div className="flex justify-center items-center gap-1 mt-3 text-xs text-gray-500">
         {binary || consolOverlay ? (
           <>
-            <div className="w-4 h-3 rounded-sm" style={{ background: "#668fa9" }} />
+            <div className="w-4 h-3 rounded-sm" style={{ background: "#3B4FE4" }} />
             <span>Consolidation potential</span>
             <div className="w-4 h-3 bg-white border border-gray-300 rounded-sm ml-2" />
             <span>No consolidation potential</span>
