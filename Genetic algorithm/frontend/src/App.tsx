@@ -570,11 +570,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen" style={{ background: "#F7F8FA" }}>
-      <nav className="px-6 py-3 flex items-center gap-3 border-b" style={{ background: "#FFFFFF", borderColor: "#E2E5EB" }}>
-        <img src="/logo.svg" alt="Re:config" className="h-7" />
-        <div className="w-px h-5 bg-border-light" />
-        <span className="font-heading font-semibold text-heading">DSM GA</span>
-        <span className="text-muted text-sm font-body">Optimization Toolkit</span>
+      <nav className="px-6 py-3 flex items-center gap-2 border-b" style={{ background: "#FFFFFF", borderColor: "#E2E5EB" }}>
+        <span className="font-heading font-bold text-lg" style={{ color: "#3B4FE4" }}>DSM GA</span>
+        <span className="text-sm font-body" style={{ color: "#8B92A5" }}>Optimization Toolkit</span>
       </nav>
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
         {/* Section 1: Data Import */}
