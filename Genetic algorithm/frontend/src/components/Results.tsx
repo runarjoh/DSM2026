@@ -1,8 +1,10 @@
+import { useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
+import Heatmap from "./Heatmap";
 
 interface ProgressPoint {
   gen: number;
@@ -22,6 +24,10 @@ interface ResultData {
   resultPath?: string;
   figurePath?: string;
   bestParams?: Record<string, number | string>;
+  resultFreq?: number[][];
+  resultConsol?: number[][];
+  resultUnits?: string[];
+  resultGroups?: number[];
 }
 
 interface SensitivityResult {
@@ -52,6 +58,7 @@ interface Props {
 }
 
 export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult }: Props) {
+  const [resultView, setResultView] = useState<"freq" | "consol" | "combined">("combined");
   const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (
@@ -182,14 +189,30 @@ export default function Results({ status, phase, progressData, trialData, result
             </div>
           )}
 
-          {/* DSM figure */}
-          {result.figurePath && (
+          {/* DSM result with toggles */}
+          {result.resultFreq && result.resultConsol && result.resultUnits && (
             <div className="mb-4">
-              <div className="text-xs font-semibold text-gray-500 mb-2">Optimized DSM</div>
-              <img
-                src={`/api/results/${result.figurePath}`}
-                alt="Optimized DSM Figure"
-                className="max-w-full rounded border border-gray-200"
+              <div className="flex items-center gap-2 mb-2">
+                <div className="text-xs font-semibold" style={{ color: "#5A6178" }}>Optimized DSM</div>
+                <div className="ml-auto flex gap-1">
+                  {(["freq", "consol", "combined"] as const).map((v) => (
+                    <button
+                      key={v}
+                      className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+                      style={resultView === v ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" } : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                      onClick={() => setResultView(v)}
+                    >
+                      {v === "freq" ? "Frequency" : v === "consol" ? "Consolidation" : "Combined"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Heatmap
+                matrix={resultView === "consol" ? result.resultConsol : result.resultFreq}
+                units={result.resultUnits}
+                binary={resultView === "consol"}
+                consolOverlay={resultView === "combined" ? result.resultConsol : null}
+                groups={result.resultGroups}
               />
             </div>
           )}

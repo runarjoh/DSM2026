@@ -36,7 +36,7 @@ def plot_dsm_paper(
             c_start[g] = idx
         c_end[g] = idx
 
-    CONSOL_COLOR = [0.40, 0.63, 0.85, 1.0]
+    CONSOL_COLOR = [0.231, 0.310, 0.894, 1.0]  # Reconfig Blue #3B4FE4
     DIAG_COLOR = [0.88, 0.88, 0.88, 1.0]
     WHITE = [1.00, 1.00, 1.00, 1.0]
 

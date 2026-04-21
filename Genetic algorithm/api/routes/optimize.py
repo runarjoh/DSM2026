@@ -106,6 +106,10 @@ def _run_optimize(run_id: str, app_config: AppConfig, overrides: OptimizeRequest
             "fitness": fitness,
             "result_path": result_name,
             "figure_path": fig_name,
+            "result_freq": dsm_reordered.values.tolist(),
+            "result_consol": consol_reordered.values.tolist(),
+            "result_units": sorted_units,
+            "result_groups": sorted_groups,
         })
 
     except CancelledError:
