@@ -46,32 +46,35 @@ export default function ConfigureRun({
   const disabled = !dataReady || running;
 
   return (
-    <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!dataReady ? "opacity-50 pointer-events-none" : ""}`}>
+    <section className={`bg-white rounded-rc border p-6 shadow-rc ${!dataReady ? "opacity-50 pointer-events-none" : ""}`} style={{ borderColor: "#EBEEF3" }}>
       <div className="flex items-center gap-2 mb-4">
-        <span className={`${dataReady ? "bg-blue-600" : "bg-gray-400"} text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold`}>
+        <span className={`text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold`} style={{ background: dataReady ? "#3B4FE4" : "#8B92A5" }}>
           3
         </span>
-        <h2 className="text-base font-semibold">Configure & Run</h2>
+        <h2 className="text-base font-semibold font-heading" style={{ color: "#1A1D26" }}>Configure & Run</h2>
       </div>
 
       {/* Mode toggle */}
-      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 mb-4 max-w-md">
+      <div className="flex rounded-lg p-0.5 gap-0.5 mb-4 max-w-md" style={{ background: "#F1F3F7" }}>
         <button
-          className={`flex-1 text-sm py-2 rounded-md font-medium ${mode === "optimize" ? "bg-blue-600 text-white" : "text-gray-500"}`}
+          className={`flex-1 text-sm py-2 rounded-md font-medium transition-all duration-200 ${mode === "optimize" ? "text-white shadow-sm" : ""}`}
+          style={mode === "optimize" ? { background: "#3B4FE4" } : { color: "#5A6178" }}
           onClick={() => onModeChange("optimize")}
           disabled={running}
         >
           Optimize
         </button>
         <button
-          className={`flex-1 text-sm py-2 rounded-md font-medium ${mode === "tune" ? "bg-blue-600 text-white" : "text-gray-500"}`}
+          className={`flex-1 text-sm py-2 rounded-md font-medium transition-all duration-200 ${mode === "tune" ? "text-white shadow-sm" : ""}`}
+          style={mode === "tune" ? { background: "#3B4FE4" } : { color: "#5A6178" }}
           onClick={() => onModeChange("tune")}
           disabled={running}
         >
           Tune Parameters
         </button>
         <button
-          className={`flex-1 text-sm py-2 rounded-md font-medium ${mode === "sensitivity" ? "bg-blue-600 text-white" : "text-gray-500"}`}
+          className={`flex-1 text-sm py-2 rounded-md font-medium transition-all duration-200 ${mode === "sensitivity" ? "text-white shadow-sm" : ""}`}
+          style={mode === "sensitivity" ? { background: "#3B4FE4" } : { color: "#5A6178" }}
           onClick={() => onModeChange("sensitivity")}
           disabled={running}
         >
@@ -235,7 +238,8 @@ export default function ConfigureRun({
       {mode !== "sensitivity" && (
         <div className="flex gap-3 items-center">
           <button
-            className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="text-white px-5 py-2 rounded-md text-sm font-medium disabled:opacity-50 transition-colors duration-200"
+            style={{ background: "#3B4FE4" }}
             onClick={onRun}
             disabled={disabled}
           >
@@ -243,7 +247,8 @@ export default function ConfigureRun({
           </button>
           {running && (
             <button
-              className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+              className="text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+              style={{ background: "#7C5CFF" }}
               onClick={onCancel}
             >
               Cancel
@@ -251,7 +256,7 @@ export default function ConfigureRun({
           )}
           {status !== "idle" && !running && (
             <button
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300"
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200" style={{ background: "#F1F3F7", color: "#5A6178" }}
               onClick={onReset}
             >
               Reset

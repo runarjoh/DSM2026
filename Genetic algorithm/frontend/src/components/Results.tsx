@@ -55,35 +55,35 @@ export default function Results({ status, phase, progressData, trialData, result
   const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (
-    <section className={`bg-white rounded-lg border border-gray-200 p-6 ${!hasData ? "opacity-50" : ""}`}>
+    <section className={`bg-white rounded-rc border p-6 shadow-rc ${!hasData ? "opacity-50" : ""}`} style={{ borderColor: "#EBEEF3" }}>
       <div className="flex items-center gap-2 mb-4">
-        <span className={`${status === "done" ? "bg-green-600" : hasData ? "bg-blue-600" : "bg-gray-400"} text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold`}>
+        <span className="text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold" style={{ background: status === "done" ? "#00D9A5" : hasData ? "#3B4FE4" : "#8B92A5" }}>
           4
         </span>
-        <h2 className="text-base font-semibold">Results</h2>
+        <h2 className="text-base font-semibold font-heading" style={{ color: "#1A1D26" }}>Results</h2>
         {status === "running" && phase === "tune" && (
-          <span className="text-xs text-blue-600 font-medium ml-2">Phase 1: Tuning</span>
+          <span className="text-xs font-medium ml-2" style={{ color: "#3B4FE4" }}>Phase 1: Tuning</span>
         )}
         {status === "running" && phase === "optimize" && (
-          <span className="text-xs text-blue-600 font-medium ml-2">Phase 2: Optimizing</span>
+          <span className="text-xs font-medium ml-2" style={{ color: "#3B4FE4" }}>Phase 2: Optimizing</span>
         )}
         {status === "running" && sensitivityType === "importance" && (
-          <span className="text-xs text-blue-600 font-medium ml-2">
+          <span className="text-xs font-medium ml-2" style={{ color: "#3B4FE4" }}>
             Running importance analysis{trialData.length > 0 ? ` — ${trialData.length} trials` : ""}
           </span>
         )}
         {status === "running" && sensitivityType === "robustness" && sensitivityProgress.length > 0 && (
-          <span className="text-xs text-blue-600 font-medium ml-2">
+          <span className="text-xs font-medium ml-2" style={{ color: "#3B4FE4" }}>
             Robustness — {sensitivityProgress[sensitivityProgress.length - 1].label}
           </span>
         )}
         {status === "running" && sensitivityType === "sweep" && sensitivityProgress.length > 0 && (
-          <span className="text-xs text-blue-600 font-medium ml-2">
+          <span className="text-xs font-medium ml-2" style={{ color: "#3B4FE4" }}>
             Sweep — {sensitivityProgress[sensitivityProgress.length - 1].label}
           </span>
         )}
         {status === "done" && result?.fitness != null && (
-          <span className="text-xs text-green-600 font-medium ml-auto">
+          <span className="text-xs font-medium ml-auto" style={{ color: "#00B589" }}>
             Final fitness: {result.fitness.toFixed(4)}
           </span>
         )}
@@ -305,16 +305,16 @@ export default function Results({ status, phase, progressData, trialData, result
 
       {/* Error */}
       {status === "error" && error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-2">
-          <p className="text-sm text-red-700 font-medium">Error</p>
-          <pre className="text-xs text-red-600 mt-1 whitespace-pre-wrap">{error}</pre>
+        <div className="rounded-rc p-3 mt-2" style={{ background: "#F5F0FF", border: "1px solid #D4C4FF" }}>
+          <p className="text-sm font-medium" style={{ color: "#5A3FCC" }}>Error</p>
+          <pre className="text-xs mt-1 whitespace-pre-wrap font-mono" style={{ color: "#7C5CFF" }}>{error}</pre>
         </div>
       )}
 
       {/* Cancelled */}
       {status === "cancelled" && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
-          <p className="text-sm text-yellow-700">Run cancelled.</p>
+        <div className="rounded-rc p-3 mt-2" style={{ background: "#F1F3F7", border: "1px solid #E2E5EB" }}>
+          <p className="text-sm" style={{ color: "#5A6178" }}>Run cancelled.</p>
         </div>
       )}
     </section>

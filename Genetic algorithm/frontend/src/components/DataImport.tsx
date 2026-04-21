@@ -31,12 +31,12 @@ function FileCard({
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center">
-      <div className="text-sm font-semibold text-gray-700">{label}</div>
+    <div className="border border-dashed rounded-rc p-4 text-center" style={{ borderColor: "#E2E5EB" }}>
+      <div className="text-sm font-semibold font-heading" style={{ color: "#1A1D26" }}>{label}</div>
       {info ? (
         <>
-          <div className="text-xs text-gray-500 mt-1 truncate">{info.name}</div>
-          <div className="text-xs text-gray-400 mt-0.5">
+          <div className="text-xs mt-1 truncate" style={{ color: "#5A6178" }}>{info.name}</div>
+          <div className="text-xs mt-0.5" style={{ color: "#8B92A5" }}>
             {info.rows} x {info.cols}
           </div>
         </>
@@ -55,7 +55,7 @@ function FileCard({
         }}
       />
       <button
-        className="mt-2 text-xs px-3 py-1 border border-gray-300 rounded bg-white text-blue-600 hover:bg-gray-50 disabled:opacity-50"
+        className="mt-2 text-xs px-3 py-1 border rounded-md bg-white disabled:opacity-50 transition-colors duration-200" style={{ borderColor: "#E2E5EB", color: "#3B4FE4" }}
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
       >
@@ -104,7 +104,7 @@ function GroupingCard({
         </>
       ) : (
         <button
-          className="mt-2 text-xs px-3 py-1 border border-gray-300 rounded bg-white text-blue-600 hover:bg-gray-50 disabled:opacity-50"
+          className="mt-2 text-xs px-3 py-1 border rounded-md bg-white disabled:opacity-50 transition-colors duration-200" style={{ borderColor: "#E2E5EB", color: "#3B4FE4" }}
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
         >
@@ -128,14 +128,14 @@ function GroupingCard({
 
 export default function DataImport({ freqFile, consolFile, groupingFile, onReplace, onGroupingUpload, onGroupingClear, disabled }: Props) {
   return (
-    <section className="bg-white rounded-lg border border-gray-200 p-6">
+    <section className="bg-white rounded-rc border p-6 shadow-rc" style={{ borderColor: "#EBEEF3" }}>
       <div className="flex items-center gap-2 mb-4">
-        <span className="bg-blue-600 text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold">
+        <span className="text-white rounded-full w-6 h-6 inline-flex items-center justify-center text-xs font-bold" style={{ background: "#3B4FE4" }}>
           1
         </span>
-        <h2 className="text-base font-semibold">Data Import</h2>
+        <h2 className="text-base font-semibold font-heading" style={{ color: "#1A1D26" }}>Data Import</h2>
         {freqFile && consolFile && (
-          <span className="ml-auto text-xs text-green-600 font-medium">Loaded from config</span>
+          <span className="ml-auto text-xs font-medium" style={{ color: "#00B589" }}>Loaded from config</span>
         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

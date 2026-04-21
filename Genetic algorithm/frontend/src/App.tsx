@@ -569,10 +569,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-slate-800 text-white px-6 py-3 flex items-center gap-2">
-        <span className="text-lg font-semibold">DSM GA</span>
-        <span className="text-slate-400 text-sm">Optimization Toolkit</span>
+    <div className="min-h-screen" style={{ background: "#F7F8FA" }}>
+      <nav className="px-6 py-3 flex items-center gap-3 border-b" style={{ background: "#FFFFFF", borderColor: "#E2E5EB" }}>
+        <img src="/logo.svg" alt="Re:config" className="h-7" />
+        <div className="w-px h-5 bg-border-light" />
+        <span className="font-heading font-semibold text-heading">DSM GA</span>
+        <span className="text-muted text-sm font-body">Optimization Toolkit</span>
       </nav>
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
         {/* Section 1: Data Import */}
@@ -587,8 +589,8 @@ export default function App() {
         />
 
         {s.dataError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-sm text-red-700">{s.dataError}</p>
+          <div className="rounded-rc p-3" style={{ background: "#F5F0FF", border: "1px solid #D4C4FF" }}>
+            <p className="text-sm" style={{ color: "#5A3FCC" }}>{s.dataError}</p>
           </div>
         )}
 
