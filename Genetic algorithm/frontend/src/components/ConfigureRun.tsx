@@ -22,28 +22,28 @@ interface Props {
 // Single source of truth: weight fields per fitness mode
 export const modeWeights: Record<string, { key: string; label: string }[]> = {
   classic: [
-    { key: "alpha", label: "\u03B1 — S1 cross-boundary" },
-    { key: "beta", label: "\u03B2 — S2 missing-within" },
-    { key: "gamma", label: "\u03B3 — S3 consol-omission" },
+    { key: "alpha", label: "\u03B1 — Frequency between" },
+    { key: "beta", label: "\u03B2 — Frequency gap" },
+    { key: "gamma", label: "\u03B3 — Consolidation between" },
   ],
   mdl_pure: [
-    { key: "alpha", label: "\u03B1 — S1 cross-boundary" },
-    { key: "beta", label: "\u03B2 — S2 missing-within" },
-    { key: "gamma", label: "\u03B3 — S3 consol-omission" },
-    { key: "delta", label: "\u03B4 — S4 consol-overreach" },
+    { key: "alpha", label: "\u03B1 — Frequency between" },
+    { key: "beta", label: "\u03B2 — Frequency gap" },
+    { key: "gamma", label: "\u03B3 — Consolidation between" },
+    { key: "delta", label: "\u03B4 — Consolidation gap" },
   ],
   full: [
-    { key: "alpha", label: "\u03B1 — S1 cross-boundary" },
-    { key: "beta", label: "\u03B2 — S2 missing-within" },
-    { key: "gamma", label: "\u03B3 — S3 consol-omission" },
-    { key: "delta", label: "\u03B4 — S4 consol-overreach" },
+    { key: "alpha", label: "\u03B1 — Frequency between" },
+    { key: "beta", label: "\u03B2 — Frequency gap" },
+    { key: "gamma", label: "\u03B3 — Consolidation between" },
+    { key: "delta", label: "\u03B4 — Consolidation gap" },
     { key: "epsilon", label: "\u03B5 — Size imbalance" },
   ],
   anti_singleton: [
-    { key: "alpha", label: "\u03B1 — S1 cross-boundary" },
-    { key: "beta", label: "\u03B2 — S2 missing-within" },
-    { key: "gamma", label: "\u03B3 — S3 consol-omission" },
-    { key: "delta", label: "\u03B4 — S4 consol-overreach" },
+    { key: "alpha", label: "\u03B1 — Frequency between" },
+    { key: "beta", label: "\u03B2 — Frequency gap" },
+    { key: "gamma", label: "\u03B3 — Consolidation between" },
+    { key: "delta", label: "\u03B4 — Consolidation gap" },
     { key: "epsilon", label: "\u03B5 — Size imbalance" },
     { key: "zeta", label: "\u03B6 — Singleton penalty" },
   ],
@@ -131,10 +131,10 @@ export default function ConfigureRun({
             onChange={(e) => onGaParam("fitness_mode", e.target.value)}
             disabled={disabled}
           >
-            <option value="classic">Type 3 only</option>
-            <option value="mdl_pure">Type 3 + Type 4 errors</option>
-            <option value="full">Type 3 + Type 4 + Size balance</option>
-            <option value="anti_singleton">Type 3 + Type 4 + Anti-singleton</option>
+            <option value="classic">Freq + consol between</option>
+            <option value="mdl_pure">Freq + consol between/gap</option>
+            <option value="full">Between/gap + size balance</option>
+            <option value="anti_singleton">Between/gap + anti-singleton</option>
           </select>
         </label>
       </div>
@@ -155,12 +155,12 @@ export default function ConfigureRun({
           // Build terms list
           const terms: React.ReactNode[] = [
             <span key="mdl"><span>(1-{mdlWeightParts.join("-")})</span>{dot}<span>MDL</span></span>,
-            <span key="s1">{w("\u03B1")}{dot}<span>S1<sub>cross-boundary</sub></span></span>,
-            <span key="s2">{w("\u03B2")}{dot}<span>S2<sub>missing-within</sub></span></span>,
-            <span key="s3">{w("\u03B3")}{dot}<span>S3<sub>consol-omission</sub></span></span>,
+            <span key="s1">{w("\u03B1")}{dot}<span>Freq<sub>between</sub></span></span>,
+            <span key="s2">{w("\u03B2")}{dot}<span>Freq<sub>gap</sub></span></span>,
+            <span key="s3">{w("\u03B3")}{dot}<span>Consol<sub>between</sub></span></span>,
           ];
           if (mode !== "classic") {
-            terms.push(<span key="s4">{w("\u03B4")}{dot}<span>S4<sub>consol-overreach</sub></span></span>);
+            terms.push(<span key="s4">{w("\u03B4")}{dot}<span>Consol<sub>gap</sub></span></span>);
           }
           if (mode === "full" || mode === "anti_singleton") {
             terms.push(<span key="si">{w("\u03B5")}{dot}<span className="text-emerald-600">SizeImbalance</span></span>);
@@ -179,8 +179,8 @@ export default function ConfigureRun({
         <div className="text-xs text-gray-400 mt-1">
           {(() => {
             const mode = gaParams.fitness_mode || "mdl_pure";
-            if (mode === "classic") return "S1-S3 scaled by 2\u00B7log\u2082(n+1). Only frequency and consolidation errors, no structural balance terms.";
-            if (mode === "mdl_pure") return "All error terms scaled by 2\u00B7log\u2082(n+1). S4 counts within-cluster pairs with no consolidation potential.";
+            if (mode === "classic") return "Frequency and consolidation between/gap errors, scaled by 2\u00B7log\u2082(n+1). No structural balance terms.";
+            if (mode === "mdl_pure") return "All error terms scaled by 2\u00B7log\u2082(n+1). Penalizes both cross-boundary interactions and missing potential within clusters.";
             if (mode === "full") return "All error terms + size imbalance scaled by 2\u00B7log\u2082(n+1). Adds structural pressure for even cluster sizes.";
             return "All error terms + size imbalance + singleton\u00B2/target_clusters, all scaled by 2\u00B7log\u2082(n+1). Quadratic singleton penalty escalates sharply with more isolated units.";
           })()}

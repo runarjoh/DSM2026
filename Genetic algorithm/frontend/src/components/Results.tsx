@@ -5,6 +5,7 @@ import {
   BarChart, Bar,
 } from "recharts";
 import Heatmap from "./Heatmap";
+import StatsTable, { type FitnessStats } from "./StatsTable";
 import { preprocessMatrix } from "../utils/preprocess";
 
 interface ProgressPoint {
@@ -22,6 +23,21 @@ interface TrialPoint {
 
 interface ResultData {
   fitness?: number;
+  mdl?: number;
+  nClusters?: number;
+  components?: Record<string, { weight: number; value: number }>;
+  freqWithin?: number;
+  freqOutside?: number;
+  consolWithin?: number;
+  consolOutside?: number;
+  bothWithin?: number;
+  bothOutside?: number;
+  noFreqWithin?: number;
+  noFreqOutside?: number;
+  noConsolWithin?: number;
+  noConsolOutside?: number;
+  blankWithin?: number;
+  blankOutside?: number;
   resultPath?: string;
   figurePath?: string;
   bestParams?: Record<string, number | string>;
@@ -46,6 +62,14 @@ interface SensitivityProgressPoint {
   fitness: number;
 }
 
+interface PreviewData {
+  freqMatrix: number[][];
+  consolMatrix: number[][];
+  units: string[];
+  groups: number[] | null;
+  fitnessStats: FitnessStats | null;
+}
+
 interface Props {
   status: "idle" | "running" | "done" | "error" | "cancelled";
   phase: "idle" | "tune" | "optimize";
@@ -58,16 +82,24 @@ interface Props {
   sensitivityResult?: SensitivityResult | null;
   preprocessMode?: string;
   freqThreshold?: number;
+  preview?: PreviewData | null;
 }
 
-export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult, preprocessMode = "normalize", freqThreshold = 0 }: Props) {
+export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult, preprocessMode = "normalize", freqThreshold = 0, preview = null }: Props) {
   const [resultView, setResultView] = useState<"freq" | "consol" | "combined">("combined");
-  const [showPreprocessed, setShowPreprocessed] = useState(false);
+  const [showPreprocessed, setShowPreprocessed] = useState(true);
+  const [showBefore, setShowBefore] = useState(false);
+  const [showCounts, setShowCounts] = useState(false);
 
   const displayResultFreq = useMemo(() => {
     if (!result?.resultFreq || !showPreprocessed) return result?.resultFreq;
     return preprocessMatrix(result.resultFreq, preprocessMode as "normalize" | "binary", freqThreshold);
   }, [result?.resultFreq, showPreprocessed, preprocessMode, freqThreshold]);
+
+  const displayPreviewFreq = useMemo(() => {
+    if (!preview?.freqMatrix || !showPreprocessed) return preview?.freqMatrix;
+    return preprocessMatrix(preview.freqMatrix, preprocessMode as "normalize" | "binary", freqThreshold);
+  }, [preview?.freqMatrix, showPreprocessed, preprocessMode, freqThreshold]);
 
   const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
@@ -203,24 +235,37 @@ export default function Results({ status, phase, progressData, trialData, result
           {result.resultFreq && result.resultConsol && result.resultUnits && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
-                <div className="text-xs font-semibold" style={{ color: "#5A6178" }}>Optimized DSM</div>
-                <div className="ml-auto flex items-center gap-1">
-                  <span className="text-xs text-gray-400 mr-1">Values:</span>
-                  {(["raw", "preprocessed"] as const).map((v) => (
-                    <button
-                      key={v}
-                      className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
-                      style={(v === "preprocessed") === showPreprocessed
-                        ? { borderColor: "#10b981", background: "#ecfdf5", color: "#059669" }
-                        : { borderColor: "#E2E5EB", color: "#5A6178" }}
-                      onClick={() => setShowPreprocessed(v === "preprocessed")}
-                    >
-                      {v === "raw" ? "Raw" : "Preprocessed"}
-                    </button>
-                  ))}
+                <div className="text-xs font-semibold" style={{ color: "#5A6178" }}>
+                  {showBefore ? "Before Optimization" : "Optimized DSM"}
                 </div>
+                {preview && (
+                  <button
+                    className="text-xs px-2.5 py-1 rounded border transition-colors duration-200"
+                    style={showBefore
+                      ? { borderColor: "#f59e0b", background: "#fffbeb", color: "#d97706" }
+                      : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                    onClick={() => setShowBefore(!showBefore)}
+                  >
+                    {showBefore ? "Show After" : "Show Before"}
+                  </button>
+                )}
               </div>
-              <div className="flex items-center gap-1 mb-2 ml-0">
+              <div className="flex items-center gap-1 mb-2 ml-8">
+                <span className="text-xs text-gray-400 mr-1">Values:</span>
+                {(["raw", "preprocessed"] as const).map((v) => (
+                  <button
+                    key={v}
+                    className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+                    style={(v === "preprocessed") === showPreprocessed
+                      ? { borderColor: "#10b981", background: "#ecfdf5", color: "#059669" }
+                      : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                    onClick={() => setShowPreprocessed(v === "preprocessed")}
+                  >
+                    {v === "raw" ? "Raw" : "Preprocessed"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 mb-4 ml-8">
                 <span className="text-xs text-gray-400 mr-1">Layer:</span>
                 {(["freq", "consol", "combined"] as const).map((v) => (
                   <button
@@ -234,12 +279,45 @@ export default function Results({ status, phase, progressData, trialData, result
                 ))}
               </div>
               <Heatmap
-                matrix={resultView === "consol" ? result.resultConsol : (displayResultFreq || result.resultFreq)}
-                units={result.resultUnits}
+                matrix={showBefore && preview
+                  ? (resultView === "consol" ? preview.consolMatrix : (displayPreviewFreq || preview.freqMatrix))
+                  : (resultView === "consol" ? result.resultConsol : (displayResultFreq || result.resultFreq))}
+                units={showBefore && preview ? preview.units : result.resultUnits}
                 binary={resultView === "consol" || (showPreprocessed && preprocessMode === "binary" && resultView === "freq")}
-                consolOverlay={resultView === "combined" ? result.resultConsol : null}
-                groups={result.resultGroups}
+                consolOverlay={resultView === "combined" ? (showBefore && preview ? preview.consolMatrix : result.resultConsol) : null}
+                groups={showBefore && preview ? preview.groups : result.resultGroups}
               />
+              {result.fitness != null && result.freqWithin != null && (
+                <>
+                  <div className="flex items-center gap-1 mt-3 mb-1">
+                    <button
+                      className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+                      style={showCounts
+                        ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" }
+                        : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                      onClick={() => setShowCounts(!showCounts)}
+                    >
+                      {showCounts ? "Hide cell counts" : "Show cell counts"}
+                    </button>
+                  </div>
+                  <StatsTable
+                    stats={{
+                      fitness: result.fitness,
+                      mdl: result.mdl!, nClusters: result.nClusters!,
+                      components: result.components!,
+                      freqWithin: result.freqWithin!, freqOutside: result.freqOutside!,
+                      consolWithin: result.consolWithin!, consolOutside: result.consolOutside!,
+                      bothWithin: result.bothWithin!, bothOutside: result.bothOutside!,
+                      noFreqWithin: result.noFreqWithin!, noFreqOutside: result.noFreqOutside!,
+                      noConsolWithin: result.noConsolWithin!, noConsolOutside: result.noConsolOutside!,
+                      blankWithin: result.blankWithin!, blankOutside: result.blankOutside!,
+                    }}
+                    beforeStats={preview?.fitnessStats}
+                    showCounts={showCounts}
+                    freqThreshold={freqThreshold}
+                  />
+                </>
+              )}
             </div>
           )}
 

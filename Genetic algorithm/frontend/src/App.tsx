@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useRef } from "react";
+import { useReducer, useEffect, useRef, useState, useCallback } from "react";
 import DataImport, { type FileInfo } from "./components/DataImport";
 import MatrixPreview from "./components/MatrixPreview";
 import ConfigureRun, { modeWeights } from "./components/ConfigureRun";
@@ -46,6 +46,21 @@ interface AppState {
   trialData: TrialPoint[];
   result: {
     fitness?: number;
+    mdl?: number;
+    nClusters?: number;
+    components?: Record<string, { weight: number; value: number }>;
+    freqWithin?: number;
+    freqOutside?: number;
+    consolWithin?: number;
+    consolOutside?: number;
+    bothWithin?: number;
+    bothOutside?: number;
+    noFreqWithin?: number;
+    noFreqOutside?: number;
+    noConsolWithin?: number;
+    noConsolOutside?: number;
+    blankWithin?: number;
+    blankOutside?: number;
     resultPath?: string;
     figurePath?: string;
     bestParams?: Record<string, number | string>;
@@ -273,9 +288,36 @@ export default function App() {
           const resRes = await fetch("/api/latest-result");
           if (resRes.ok) {
             const lr = await resRes.json();
+            // Compute fitness + counts for loaded result
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let fitData: any = {};
+            try {
+              const fitRes = await fetch("/api/compute-fitness", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ clusters: lr.result_groups }),
+              });
+              if (fitRes.ok) fitData = await fitRes.json();
+            } catch { /* fitness optional */ }
             dispatch({
               type: "done",
               result: {
+                fitness: fitData.fitness,
+                mdl: fitData.mdl,
+                nClusters: fitData.n_clusters,
+                components: fitData.components,
+                freqWithin: fitData.freq_within,
+                freqOutside: fitData.freq_outside,
+                consolWithin: fitData.consol_within,
+                consolOutside: fitData.consol_outside,
+                bothWithin: fitData.both_within,
+                bothOutside: fitData.both_outside,
+                noFreqWithin: fitData.no_freq_within,
+                noFreqOutside: fitData.no_freq_outside,
+                noConsolWithin: fitData.no_consol_within,
+                noConsolOutside: fitData.no_consol_outside,
+                blankWithin: fitData.blank_within,
+                blankOutside: fitData.blank_outside,
                 resultPath: lr.result_path,
                 figurePath: lr.figure_path,
                 resultFreq: lr.result_freq,
@@ -381,6 +423,51 @@ export default function App() {
     }
   }
 
+  // Compute fitness + cell counts for preview DSM when groups + GA params change
+  interface FitnessComponent { weight: number; value: number }
+  interface FitnessStats { fitness: number; mdl: number; nClusters: number; components: Record<string, FitnessComponent>; freqWithin: number; freqOutside: number; consolWithin: number; consolOutside: number; bothWithin: number; bothOutside: number; noFreqWithin: number; noFreqOutside: number; noConsolWithin: number; noConsolOutside: number; blankWithin: number; blankOutside: number }
+  const [previewStats, setPreviewStats] = useState<FitnessStats | null>(null);
+  const fetchFitness = useCallback(async (clusters: number[], freqPath: string, consolPath: string, gaParams: Record<string, string>) => {
+    try {
+      const ga: Record<string, number | string> = {};
+      for (const [k, v] of Object.entries(gaParams)) {
+        const num = Number(v);
+        ga[k] = isNaN(num) ? v : num;
+      }
+      const res = await fetch("/api/compute-fitness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clusters, freq_csv: freqPath, consol_csv: consolPath, ga }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewStats({
+          fitness: data.fitness,
+          mdl: data.mdl,
+          nClusters: data.n_clusters,
+          components: data.components,
+          freqWithin: data.freq_within,
+          freqOutside: data.freq_outside,
+          consolWithin: data.consol_within,
+          consolOutside: data.consol_outside,
+          bothWithin: data.both_within,
+          bothOutside: data.both_outside,
+          noFreqWithin: data.no_freq_within,
+          noFreqOutside: data.no_freq_outside,
+          noConsolWithin: data.no_consol_within,
+          noConsolOutside: data.no_consol_outside,
+          blankWithin: data.blank_within,
+          blankOutside: data.blank_outside,
+        });
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (!s.priorGroups || !s.freqFile?.path) { setPreviewStats(null); return; }
+    fetchFitness(s.priorGroups, s.freqFile.path, s.consolFile?.path || "", s.gaParams);
+  }, [s.priorGroups, s.freqFile?.path, s.consolFile?.path, s.gaParams, fetchFitness]);
+
   /** Build GA overrides from current form state, using modeWeights for weight fields. */
   function buildGaOverrides(): Record<string, number | string> {
     const ga: Record<string, number | string> = {};
@@ -475,20 +562,28 @@ export default function App() {
         case "phase":
           dispatch({ type: "phase", phase: evt.phase });
           break;
-        case "done":
-          dispatch({
-            type: "done",
-            result: {
-              fitness: evt.fitness,
-              resultPath: evt.result_path,
-              figurePath: evt.figure_path,
-              bestParams: evt.best_params,
-              resultFreq: evt.result_freq,
-              resultConsol: evt.result_consol,
-              resultUnits: evt.result_units,
-              resultGroups: evt.result_groups,
-            },
-          });
+        case "done": {
+          const doneResult: AppState["result"] = {
+            fitness: evt.fitness,
+            resultPath: evt.result_path,
+            figurePath: evt.figure_path,
+            bestParams: evt.best_params,
+            resultFreq: evt.result_freq,
+            resultConsol: evt.result_consol,
+            resultUnits: evt.result_units,
+            resultGroups: evt.result_groups,
+          };
+          dispatch({ type: "done", result: doneResult });
+          // Fetch cell counts for the result
+          if (evt.result_groups) {
+            fetch("/api/compute-fitness", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ clusters: evt.result_groups }),
+            }).then(r => r.json()).then(data => {
+              dispatch({ type: "done", result: { ...doneResult, mdl: data.mdl, nClusters: data.n_clusters, components: data.components, freqWithin: data.freq_within, freqOutside: data.freq_outside, consolWithin: data.consol_within, consolOutside: data.consol_outside, bothWithin: data.both_within, bothOutside: data.both_outside, noFreqWithin: data.no_freq_within, noFreqOutside: data.no_freq_outside, noConsolWithin: data.no_consol_within, noConsolOutside: data.no_consol_outside, blankWithin: data.blank_within, blankOutside: data.blank_outside } });
+            }).catch(() => {});
+          }
           // Apply best params from tuning to GA config and persist
           if (evt.best_params) {
             const gaUpdates: Record<string, string> = {};
@@ -508,6 +603,7 @@ export default function App() {
           }
           es.close();
           break;
+        }
         case "error":
           dispatch({ type: "error", message: evt.message });
           es.close();
@@ -650,6 +746,7 @@ export default function App() {
           groups={s.priorGroups}
           preprocessMode={s.gaParams.matrix_preprocess || "normalize"}
           freqThreshold={parseInt(s.gaParams.freq_threshold || "0") || 0}
+          fitnessStats={previewStats}
         />
 
         {/* Section 3: Configure & Run */}
@@ -684,6 +781,13 @@ export default function App() {
           sensitivityResult={s.sensitivityResult}
           preprocessMode={s.gaParams.matrix_preprocess || "normalize"}
           freqThreshold={parseInt(s.gaParams.freq_threshold || "0") || 0}
+          preview={s.freqMatrix && s.consolMatrix ? {
+            freqMatrix: s.freqMatrix,
+            consolMatrix: s.consolMatrix,
+            units: s.units,
+            groups: s.priorGroups,
+            fitnessStats: previewStats,
+          } : null}
         />
       </main>
     </div>

@@ -5,10 +5,10 @@ data:
   output_dir: ./results
   upload_dir: ./uploads
 ga:
-  alpha: 0.016646
-  beta: 0.092202
-  gamma: 0.028438
-  delta: 0.155479
+  alpha: 0.010738
+  beta: 0.038926
+  gamma: 0.022623
+  delta: 0.128259
   epsilon: 0.1
   zeta: 0.1
   max_clusters: 6
@@ -16,11 +16,11 @@ ga:
   consolidation_mode: once
   fitness_mode: mdl_pure
   matrix_preprocess: binary
-  freq_threshold: 0
+  freq_threshold: 2
   population_size: 150
   n_generations: 400
-  cxpb: 0.6708784270817745
-  mutpb: 0.09075864328355608
+  cxpb: 0.7
+  mutpb: 0.1
   tournsize: 7
 optuna:
   param_group: weights

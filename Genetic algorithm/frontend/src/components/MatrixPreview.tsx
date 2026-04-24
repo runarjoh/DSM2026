@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import Heatmap from "./Heatmap";
 import DataTable from "./DataTable";
+import StatsTable, { type FitnessStats } from "./StatsTable";
 import { preprocessMatrix } from "../utils/preprocess";
 
 interface Props {
@@ -10,12 +11,14 @@ interface Props {
   groups?: number[] | null;
   preprocessMode?: string;
   freqThreshold?: number;
+  fitnessStats?: FitnessStats | null;
 }
 
-export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups = null, preprocessMode = "normalize", freqThreshold = 0 }: Props) {
+export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups = null, preprocessMode = "normalize", freqThreshold = 0, fitnessStats = null }: Props) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
   const [which, setWhich] = useState<"freq" | "consol" | "combined">("combined");
-  const [showPreprocessed, setShowPreprocessed] = useState(false);
+  const [showPreprocessed, setShowPreprocessed] = useState(true);
+  const [showCounts, setShowCounts] = useState(false);
 
   const displayFreq = useMemo(() => {
     if (!freqMatrix || !showPreprocessed) return freqMatrix;
@@ -103,6 +106,23 @@ export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups 
         )
       ) : (
         <p className="text-sm text-gray-400">Loading matrix data...</p>
+      )}
+
+      {fitnessStats && (
+        <>
+          <div className="flex items-center gap-1 mt-3 mb-1">
+            <button
+              className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+              style={showCounts
+                ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" }
+                : { borderColor: "#E2E5EB", color: "#5A6178" }}
+              onClick={() => setShowCounts(!showCounts)}
+            >
+              {showCounts ? "Hide cell counts" : "Show cell counts"}
+            </button>
+          </div>
+          <StatsTable stats={fitnessStats} showCounts={showCounts} freqThreshold={freqThreshold} />
+        </>
       )}
     </section>
   );
