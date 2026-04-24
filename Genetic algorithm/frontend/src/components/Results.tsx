@@ -68,6 +68,7 @@ export default function Results({ status, phase, progressData, trialData, result
     if (!result?.resultFreq || !showPreprocessed) return result?.resultFreq;
     return preprocessMatrix(result.resultFreq, preprocessMode as "normalize" | "binary", freqThreshold);
   }, [result?.resultFreq, showPreprocessed, preprocessMode, freqThreshold]);
+
   const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (

@@ -11,12 +11,12 @@ ga:
   delta: 0.155479
   epsilon: 0.1
   zeta: 0.1
-  max_clusters: 14
+  max_clusters: 6
   target_clusters: 10
   consolidation_mode: once
   fitness_mode: mdl_pure
   matrix_preprocess: binary
-  freq_threshold: 2
+  freq_threshold: 0
   population_size: 150
   n_generations: 400
   cxpb: 0.6708784270817745

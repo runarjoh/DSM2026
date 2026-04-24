@@ -98,7 +98,9 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
             }
 
             // Text color: white on blue, #333333 on white (matching matplotlib)
-            const onBlue = hasConsol || (binary && val === 1) || (!binary && !consolOverlay && val / maxVal > 0.5);
+            const onBlue = consolOverlay
+              ? hasConsol
+              : (binary && val === 1) || (!binary && val / maxVal > 0.5);
             const textColor = onBlue ? "#ffffff" : "#333333";
 
             return (
