@@ -8,7 +8,7 @@ from dataclasses import replace as dc_replace
 
 import optuna
 
-from dsm_ga import GAConfig, run_ga
+from dsm_ga import GAConfig, MODE_WEIGHTS, run_ga
 from services.config import AppConfig
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -20,13 +20,81 @@ VALID_GROUPS = {"weights", "ga_operators", "clustering", "fitness_and_clustering
 # Trial config builder (from notebook cell-objective)
 # ---------------------------------------------------------------------------
 
-def _suggest_weights(trial: optuna.Trial):
-    """Sample 4 weights that sum to <= 1.0."""
-    raw = [trial.suggest_float(f"raw_w{i}", 0.0, 1.0) for i in range(4)]
-    total = sum(raw)
-    if total > 1.0:
-        raw = [w / total * 0.95 for w in raw]
-    return raw[0], raw[1], raw[2], raw[3]
+def _suggest_weights(trial: optuna.Trial, fitness_mode: str = "classic"):
+    """Sample weights using pair-balanced parameterization.
+
+    Dimensions come in opposing pairs:
+      Pair A: S1 (cross-boundary interactions) vs S2 (missing within-cluster)
+      Pair B: S3 (consolidation across boundaries) vs S4 / size-imbalance
+
+    The pair_balance parameter (clamped 0.2–0.8) prevents either pair from
+    being starved, and within-pair fractions (clamped 0.15–0.85) keep both
+    sides of each pair meaningful.
+
+    For 'full' and 'anti_singleton' modes, additional weights (epsilon, zeta)
+    are suggested independently.
+    """
+    # Reserve budget for extra weights so total stays <= 0.95
+    active = MODE_WEIGHTS.get(fitness_mode, MODE_WEIGHTS["classic"])
+    extra_budget = 0.0
+    extra_weights: dict[str, float] = {}
+
+    if "epsilon" in active:
+        extra_weights["epsilon"] = trial.suggest_float("epsilon", 0.02, 0.3)
+        extra_budget += extra_weights["epsilon"]
+    if "zeta" in active:
+        extra_weights["zeta"] = trial.suggest_float("zeta", 0.02, 0.3)
+        extra_budget += extra_weights["zeta"]
+
+    max_pair_budget = max(0.2, 0.95 - extra_budget)
+    total_weight = trial.suggest_float("total_error_weight", 0.2, max_pair_budget)
+    pair_balance = trial.suggest_float("pair_balance", 0.2, 0.8)
+
+    pair_a = total_weight * pair_balance
+    pair_b = total_weight * (1.0 - pair_balance)
+
+    s1_frac = trial.suggest_float("s1_fraction", 0.15, 0.85)
+    s3_frac = trial.suggest_float("s3_fraction", 0.15, 0.85)
+
+    alpha = pair_a * s1_frac
+    beta  = pair_a * (1.0 - s1_frac)
+    gamma = pair_b * s3_frac
+    delta = pair_b * (1.0 - s3_frac)
+
+    result = {"alpha": alpha, "beta": beta, "gamma": gamma, "delta": delta}
+    result.update(extra_weights)
+    return result
+
+
+def resolve_best_params(best_params: dict) -> dict:
+    """Convert Optuna best_params to config-level parameter names.
+
+    Translates the pair-balanced weight params (total_error_weight,
+    pair_balance, s1_fraction, s3_fraction) into alpha/beta/gamma/delta.
+    Passes through epsilon, zeta, and other params unchanged.
+    """
+    resolved: dict = {}
+    weight_keys = {"total_error_weight", "pair_balance", "s1_fraction", "s3_fraction"}
+
+    if "total_error_weight" in best_params:
+        total = best_params["total_error_weight"]
+        pb = best_params["pair_balance"]
+        s1f = best_params["s1_fraction"]
+        s3f = best_params["s3_fraction"]
+
+        pair_a = total * pb
+        pair_b = total * (1.0 - pb)
+
+        resolved["alpha"] = pair_a * s1f
+        resolved["beta"]  = pair_a * (1.0 - s1f)
+        resolved["gamma"] = pair_b * s3f
+        resolved["delta"] = pair_b * (1.0 - s3f)
+
+    for k, v in best_params.items():
+        if k not in weight_keys:
+            resolved[k] = v
+
+    return resolved
 
 
 def build_trial_config(trial: optuna.Trial, param_group: str, base: GAConfig) -> GAConfig:
@@ -34,11 +102,8 @@ def build_trial_config(trial: optuna.Trial, param_group: str, base: GAConfig) ->
     kwargs: dict = {}
 
     if param_group in ("weights", "fitness_and_clustering", "all"):
-        a, b, g, d = _suggest_weights(trial)
-        kwargs["alpha"] = a
-        kwargs["beta"] = b
-        kwargs["gamma"] = g
-        kwargs["delta"] = d
+        weights = _suggest_weights(trial, base.fitness_mode)
+        kwargs.update(weights)
 
     if param_group in ("clustering", "fitness_and_clustering", "all"):
         target = trial.suggest_int("target_clusters", 3, 15)

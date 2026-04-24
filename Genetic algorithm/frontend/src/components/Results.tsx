@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
 import Heatmap from "./Heatmap";
+import { preprocessMatrix } from "../utils/preprocess";
 
 interface ProgressPoint {
   gen: number;
@@ -55,10 +56,18 @@ interface Props {
   sensitivityType?: "importance" | "robustness" | "sweep" | null;
   sensitivityProgress?: SensitivityProgressPoint[];
   sensitivityResult?: SensitivityResult | null;
+  preprocessMode?: string;
+  freqThreshold?: number;
 }
 
-export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult }: Props) {
+export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult, preprocessMode = "normalize", freqThreshold = 0 }: Props) {
   const [resultView, setResultView] = useState<"freq" | "consol" | "combined">("combined");
+  const [showPreprocessed, setShowPreprocessed] = useState(false);
+
+  const displayResultFreq = useMemo(() => {
+    if (!result?.resultFreq || !showPreprocessed) return result?.resultFreq;
+    return preprocessMatrix(result.resultFreq, preprocessMode as "normalize" | "binary", freqThreshold);
+  }, [result?.resultFreq, showPreprocessed, preprocessMode, freqThreshold]);
   const hasData = progressData.length > 0 || trialData.length > 0 || sensitivityProgress.length > 0 || status === "done" || status === "error" || status === "cancelled" || sensitivityResult != null;
 
   return (
@@ -192,25 +201,41 @@ export default function Results({ status, phase, progressData, trialData, result
           {/* DSM result with toggles */}
           {result.resultFreq && result.resultConsol && result.resultUnits && (
             <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <div className="text-xs font-semibold" style={{ color: "#5A6178" }}>Optimized DSM</div>
-                <div className="ml-auto flex gap-1">
-                  {(["freq", "consol", "combined"] as const).map((v) => (
+                <div className="ml-auto flex items-center gap-1">
+                  <span className="text-xs text-gray-400 mr-1">Values:</span>
+                  {(["raw", "preprocessed"] as const).map((v) => (
                     <button
                       key={v}
                       className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
-                      style={resultView === v ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" } : { borderColor: "#E2E5EB", color: "#5A6178" }}
-                      onClick={() => setResultView(v)}
+                      style={(v === "preprocessed") === showPreprocessed
+                        ? { borderColor: "#10b981", background: "#ecfdf5", color: "#059669" }
+                        : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                      onClick={() => setShowPreprocessed(v === "preprocessed")}
                     >
-                      {v === "freq" ? "Frequency" : v === "consol" ? "Consolidation" : "Combined"}
+                      {v === "raw" ? "Raw" : "Preprocessed"}
                     </button>
                   ))}
                 </div>
               </div>
+              <div className="flex items-center gap-1 mb-2 ml-0">
+                <span className="text-xs text-gray-400 mr-1">Layer:</span>
+                {(["freq", "consol", "combined"] as const).map((v) => (
+                  <button
+                    key={v}
+                    className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+                    style={resultView === v ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" } : { borderColor: "#E2E5EB", color: "#5A6178" }}
+                    onClick={() => setResultView(v)}
+                  >
+                    {v === "freq" ? "Frequency" : v === "consol" ? "Consolidation" : "Combined"}
+                  </button>
+                ))}
+              </div>
               <Heatmap
-                matrix={resultView === "consol" ? result.resultConsol : result.resultFreq}
+                matrix={resultView === "consol" ? result.resultConsol : (displayResultFreq || result.resultFreq)}
                 units={result.resultUnits}
-                binary={resultView === "consol"}
+                binary={resultView === "consol" || (showPreprocessed && preprocessMode === "binary" && resultView === "freq")}
                 consolOverlay={resultView === "combined" ? result.resultConsol : null}
                 groups={result.resultGroups}
               />

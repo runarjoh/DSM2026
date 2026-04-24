@@ -43,21 +43,38 @@ class CancelledError(Exception):
 class GAConfig:
     """All tunable parameters for the DSM genetic algorithm."""
     # Fitness weights
-    alpha: float = 0.15   # type 1 error — connections across cluster boundaries
-    beta:  float = 0.05   # type 2 error — no connection within cluster
-    gamma: float = 0.15   # type 3 error — consolidation potential across clusters
-    delta: float = 0.20   # classic: cluster size imbalance / mdl_pure: type 4 consolidation overreach
+    alpha:   float = 0.15   # type 1 error — connections across cluster boundaries
+    beta:    float = 0.05   # type 2 error — no connection within cluster
+    gamma:   float = 0.15   # type 3 error — consolidation potential across clusters
+    delta:   float = 0.20   # classic: cluster size imbalance / mdl_pure+: type 4 consolidation overreach
+    epsilon: float = 0.10   # size imbalance weight (full, anti_singleton)
+    zeta:    float = 0.10   # singleton penalty weight (anti_singleton)
     # Clustering structure
     max_clusters:       int   = 10
     target_clusters:    int   = 10
-    consolidation_mode: str   = "once"  # "once" | "directional"
-    fitness_mode:       str   = "classic"  # "classic" | "mdl_pure"
+    consolidation_mode: str   = "once"       # "once" | "directional"
+    fitness_mode:       str   = "mdl_pure"    # "classic" | "mdl_pure" | "full" | "anti_singleton"
+    matrix_preprocess:  str   = "normalize"  # "normalize" | "binary"
+    freq_threshold:     int   = 0            # filter out frequency values below this before preprocessing
     # GA operators
     population_size: int   = 200
     n_generations:   int   = 400
     cxpb:            float = 0.5
     mutpb:           float = 0.1
     tournsize:       int   = 5
+
+    def active_weights(self) -> tuple[str, ...]:
+        """Return weight parameter names used by the current fitness_mode."""
+        return MODE_WEIGHTS[self.fitness_mode]
+
+
+# Single source of truth: which weight params each fitness mode uses.
+MODE_WEIGHTS: dict[str, tuple[str, ...]] = {
+    "classic":        ("alpha", "beta", "gamma"),
+    "mdl_pure":       ("alpha", "beta", "gamma", "delta"),
+    "full":           ("alpha", "beta", "gamma", "delta", "epsilon"),
+    "anti_singleton": ("alpha", "beta", "gamma", "delta", "epsilon", "zeta"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -101,17 +118,34 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
     """Return a DEAP-compatible fitness function closed over the DSM data and config."""
     n = len(dsm_matrix)
 
-    # Use actual interaction values — higher values = stronger signal
-    freq = [
+    # Step 1: Load raw frequencies and apply threshold filter (only when threshold > 0)
+    threshold = config.freq_threshold
+    raw_freq = [
         [float(dsm_matrix[r][c]) for c in range(n)]
         for r in range(n)
     ]
+    if threshold > 0:
+        raw_freq = [
+            [0.0 if 0 < raw_freq[r][c] < threshold else raw_freq[r][c]
+             for c in range(n)]
+            for r in range(n)
+        ]
 
-    # Compute max frequency for normalising S2 (missing-within penalty)
-    max_freq = max(
-        (freq[r][c] for r in range(n) for c in range(n) if r != c),
-        default=1.0,
-    ) or 1.0
+    # Step 2: Preprocess (binary or normalize)
+    if config.matrix_preprocess == "binary":
+        freq = [
+            [1.0 if raw_freq[r][c] > 0 else 0.0 for c in range(n)]
+            for r in range(n)
+        ]
+    else:  # "normalize" — scale to [0, 1]
+        max_freq = max(
+            (raw_freq[r][c] for r in range(n) for c in range(n) if r != c),
+            default=1.0,
+        ) or 1.0
+        freq = [
+            [raw_freq[r][c] / max_freq for c in range(n)]
+            for r in range(n)
+        ]
 
     def evaluate(individual):
         CLi = [0] * config.max_clusters
@@ -128,12 +162,11 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
                 same = individual[col] == individual[row]
                 val = freq[col][row]
                 if val > 0 and not same:
-                    # Type I: interaction across boundary, weighted by strength
+                    # Type I: interaction across boundary (0–1 per pair)
                     S1 += val
                 if val == 0 and same:
-                    # Type II: no interaction within cluster, penalty = max_freq
-                    # (missing a strong-signal-level connection)
-                    S2 += max_freq
+                    # Type II: no interaction within cluster (1.0 per pair)
+                    S2 += 1.0
                 if not same:
                     if config.consolidation_mode == "once":
                         if col < row and (
@@ -155,12 +188,44 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
                         if consolidation_matrix[col][row] == 0:
                             S4 += 1
 
-        mdl_weight = 1.0 - config.alpha - config.beta - config.gamma - config.delta
         MDL = Nc * math.log(n, 2) + math.log(n, 2) * sum(CLi)
         log_factor = 2 * math.log(n + 1, 2)
 
-        if config.fitness_mode == "mdl_pure":
-            # All four error types on the same MDL scale
+        ideal_size = n / config.target_clusters
+        size_imbalance = (
+            sum(
+                (CLi[c] - ideal_size) ** 2
+                for c in range(config.max_clusters)
+                if CLi[c] > 0
+            )
+            / config.target_clusters
+        )
+
+        if config.fitness_mode == "full":
+            mdl_weight = 1.0 - config.alpha - config.beta - config.gamma - config.delta - config.epsilon
+            fitness = (
+                mdl_weight * MDL
+                + config.alpha   * S1 * log_factor
+                + config.beta    * S2 * log_factor
+                + config.gamma   * S3 * log_factor
+                + config.delta   * S4 * log_factor
+                + config.epsilon * size_imbalance * log_factor
+            )
+        elif config.fitness_mode == "anti_singleton":
+            mdl_weight = 1.0 - config.alpha - config.beta - config.gamma - config.delta - config.epsilon - config.zeta
+            n_singletons = sum(1 for c in range(config.max_clusters) if CLi[c] == 1)
+            singleton_penalty = n_singletons ** 2 / config.target_clusters
+            fitness = (
+                mdl_weight * MDL
+                + config.alpha   * S1 * log_factor
+                + config.beta    * S2 * log_factor
+                + config.gamma   * S3 * log_factor
+                + config.delta   * S4 * log_factor
+                + config.epsilon * size_imbalance * log_factor
+                + config.zeta    * singleton_penalty * log_factor
+            )
+        elif config.fitness_mode == "mdl_pure":
+            mdl_weight = 1.0 - config.alpha - config.beta - config.gamma - config.delta
             fitness = (
                 mdl_weight * MDL
                 + config.alpha * S1 * log_factor
@@ -169,22 +234,13 @@ def _make_eval_fn(dsm_matrix, consolidation_matrix, config: GAConfig):
                 + config.delta * S4 * log_factor
             )
         else:
-            # Classic: delta controls cluster size imbalance penalty
-            ideal_size = n / config.target_clusters
-            size_imbalance = (
-                sum(
-                    (CLi[c] - ideal_size) ** 2
-                    for c in range(config.max_clusters)
-                    if CLi[c] > 0
-                )
-                / config.target_clusters
-            )
+            # Classic: S1 + S2 + S3 only (no S4, no size imbalance)
+            mdl_weight = 1.0 - config.alpha - config.beta - config.gamma
             fitness = (
                 mdl_weight * MDL
                 + config.alpha * S1 * log_factor
                 + config.beta  * S2 * log_factor
                 + config.gamma * S3 * log_factor
-                + config.delta * size_imbalance
             )
         return (fitness,)
 

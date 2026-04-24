@@ -1,7 +1,7 @@
 import { useReducer, useEffect, useRef } from "react";
 import DataImport, { type FileInfo } from "./components/DataImport";
 import MatrixPreview from "./components/MatrixPreview";
-import ConfigureRun from "./components/ConfigureRun";
+import ConfigureRun, { modeWeights } from "./components/ConfigureRun";
 import Results from "./components/Results";
 
 // --- Types ---
@@ -91,7 +91,8 @@ type Action =
 
 const defaultGaParams: Record<string, string> = {
   alpha: "0.15", beta: "0.05", gamma: "0.15", delta: "0.20",
-  max_clusters: "10", target_clusters: "10", consolidation_mode: "once", fitness_mode: "classic",
+  epsilon: "0.10", zeta: "0.10",
+  max_clusters: "10", target_clusters: "10", consolidation_mode: "once", fitness_mode: "mdl_pure", matrix_preprocess: "normalize", freq_threshold: "0",
   population_size: "200", n_generations: "400",
   cxpb: "0.5", mutpb: "0.1", tournsize: "5",
 };
@@ -188,6 +189,20 @@ export default function App() {
   const loaded = useRef(false);
 
   const dataReady = s.freqMatrix !== null && s.consolMatrix !== null;
+
+  // Auto-persist preprocessing params and fitness mode when they change
+  const prevPreprocess = useRef("");
+  useEffect(() => {
+    const key = `${s.gaParams.matrix_preprocess}|${s.gaParams.freq_threshold}|${s.gaParams.fitness_mode}`;
+    if (loaded.current && prevPreprocess.current && prevPreprocess.current !== key) {
+      fetch("/api/config/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ga: { matrix_preprocess: s.gaParams.matrix_preprocess || "normalize", freq_threshold: parseInt(s.gaParams.freq_threshold || "0") || 0, fitness_mode: s.gaParams.fitness_mode || "mdl_pure" } }),
+      }).catch(() => {});
+    }
+    prevPreprocess.current = key;
+  }, [s.gaParams.matrix_preprocess, s.gaParams.freq_threshold, s.gaParams.fitness_mode]);
 
   // Load config defaults + matrix data on mount
   useEffect(() => {
@@ -366,19 +381,40 @@ export default function App() {
     }
   }
 
+  /** Build GA overrides from current form state, using modeWeights for weight fields. */
+  function buildGaOverrides(): Record<string, number | string> {
+    const ga: Record<string, number | string> = {};
+    const mode = s.gaParams.fitness_mode || "mdl_pure";
+
+    // Weight params — dynamic per fitness mode
+    const weights = (modeWeights[mode] || modeWeights.classic).map((w) => w.key);
+    weights.forEach((f) => { if (s.gaParams[f] != null) ga[f] = parseFloat(s.gaParams[f]); });
+
+    // Operator & clustering params — always included
+    const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize", "freq_threshold"];
+    const floatOps = ["cxpb", "mutpb"];
+    intFields.forEach((f) => { if (s.gaParams[f] != null) ga[f] = parseInt(s.gaParams[f]); });
+    floatOps.forEach((f) => { if (s.gaParams[f] != null) ga[f] = parseFloat(s.gaParams[f]); });
+    ga.consolidation_mode = s.gaParams.consolidation_mode;
+    ga.fitness_mode = mode;
+    ga.matrix_preprocess = s.gaParams.matrix_preprocess || "normalize";
+    return ga;
+  }
+
   async function startRun() {
     try {
       const freqPath = s.freqFile?.path || "";
       const consolPath = s.consolFile?.path || "";
+      const ga = buildGaOverrides();
+
+      // Persist all current GA params to config.yaml before running
+      fetch("/api/config/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ga }),
+      }).catch(() => {});
 
       if (s.mode === "optimize") {
-        const ga: Record<string, number | string> = {};
-        const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
-        const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
-        floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
-        intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
-        ga.consolidation_mode = s.gaParams.consolidation_mode;
-        ga.fitness_mode = s.gaParams.fitness_mode;
 
         const res = await fetch("/api/optimize", {
           method: "POST",
@@ -407,7 +443,7 @@ export default function App() {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ optuna, freq_csv: freqPath, consol_csv: consolPath }),
+          body: JSON.stringify({ optuna, ga, freq_csv: freqPath, consol_csv: consolPath }),
         });
         if (!res.ok) {
           const err = await res.json();
@@ -455,16 +491,12 @@ export default function App() {
           });
           // Apply best params from tuning to GA config and persist
           if (evt.best_params) {
-            const paramMap: Record<string, string> = {
-              raw_w0: "alpha", raw_w1: "beta", raw_w2: "gamma", raw_w3: "delta",
-            };
             const gaUpdates: Record<string, string> = {};
             for (const [k, v] of Object.entries(evt.best_params as Record<string, number | string>)) {
-              const target = paramMap[k] || k;
-              if (target in defaultGaParams) {
+              if (k in defaultGaParams) {
                 const strVal = String(typeof v === "number" ? parseFloat(v.toFixed(6)) : v);
-                dispatch({ type: "setGaParam", field: target, value: strVal });
-                gaUpdates[target] = v as never;
+                dispatch({ type: "setGaParam", field: k, value: strVal });
+                gaUpdates[k] = v as never;
               }
             }
             // Persist to config.yaml
@@ -498,15 +530,7 @@ export default function App() {
       const freqPath = s.freqFile?.path || "";
       const consolPath = s.consolFile?.path || "";
 
-      // Build GA overrides from current form params
-      const ga: Record<string, number | string> = {};
-      const floatFields = ["alpha", "beta", "gamma", "delta", "cxpb", "mutpb"];
-      const intFields = ["max_clusters", "target_clusters", "population_size", "n_generations", "tournsize"];
-      floatFields.forEach((f) => (ga[f] = parseFloat(s.gaParams[f])));
-      intFields.forEach((f) => (ga[f] = parseInt(s.gaParams[f])));
-      ga.consolidation_mode = s.gaParams.consolidation_mode;
-      ga.fitness_mode = s.gaParams.fitness_mode;
-
+      const ga = buildGaOverrides();
       const body: Record<string, unknown> = { ...config, ga, freq_csv: freqPath, consol_csv: consolPath };
 
       const res = await fetch(`/api/sensitivity/${type}`, {
@@ -624,6 +648,8 @@ export default function App() {
           consolMatrix={s.consolMatrix}
           units={s.units}
           groups={s.priorGroups}
+          preprocessMode={s.gaParams.matrix_preprocess || "normalize"}
+          freqThreshold={parseInt(s.gaParams.freq_threshold || "0") || 0}
         />
 
         {/* Section 3: Configure & Run */}
@@ -642,6 +668,7 @@ export default function App() {
           onCancel={cancelRun}
           onReset={() => dispatch({ type: "reset" })}
           onSensitivityRun={startSensitivity}
+          maxFreq={s.freqMatrix ? Math.max(...s.freqMatrix.flat()) : 0}
         />
 
         {/* Section 4: Results */}
@@ -655,6 +682,8 @@ export default function App() {
           sensitivityType={s.sensitivityType}
           sensitivityProgress={s.sensitivityProgress}
           sensitivityResult={s.sensitivityResult}
+          preprocessMode={s.gaParams.matrix_preprocess || "normalize"}
+          freqThreshold={parseInt(s.gaParams.freq_threshold || "0") || 0}
         />
       </main>
     </div>

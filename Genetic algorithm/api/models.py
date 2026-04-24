@@ -16,10 +16,14 @@ class GAOverrides(BaseModel):
     beta: float | None = None
     gamma: float | None = None
     delta: float | None = None
+    epsilon: float | None = None
+    zeta: float | None = None
     max_clusters: int | None = None
     target_clusters: int | None = None
     consolidation_mode: Literal["once", "directional"] | None = None
-    fitness_mode: Literal["classic", "mdl_pure"] | None = None
+    fitness_mode: Literal["classic", "mdl_pure", "full", "anti_singleton"] | None = None
+    matrix_preprocess: Literal["normalize", "binary"] | None = None
+    freq_threshold: int | None = None
     population_size: int | None = None
     n_generations: int | None = None
     cxpb: float | None = None

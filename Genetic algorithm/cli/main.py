@@ -76,7 +76,7 @@ def tune(config_path: str):
     """Run Optuna hyperparameter tuning, print best params."""
     from dsm_ga import load_data
     from services.config import load_config
-    from services.optuna_runner import run_optuna
+    from services.optuna_runner import resolve_best_params, run_optuna
 
     cfg = load_config(config_path)
     dsm_freq, dsm_consol, _, _ = load_data(cfg.data.freq_csv, cfg.data.consol_csv)
@@ -90,7 +90,7 @@ def tune(config_path: str):
 
     click.echo(f"\nBest fitness: {study.best_value:.4f}")
     click.echo("Best parameters:")
-    for k, v in best_params.items():
+    for k, v in resolve_best_params(best_params).items():
         click.echo(f"  {k}: {v}")
 
 
@@ -102,7 +102,7 @@ def tune_optimize(config_path: str):
 
     from dsm_ga import load_data, run_ga
     from services.config import load_config
-    from services.optuna_runner import run_optuna
+    from services.optuna_runner import resolve_best_params, run_optuna
 
     cfg = load_config(config_path)
     dsm_freq, dsm_consol, units, _ = load_data(cfg.data.freq_csv, cfg.data.consol_csv)
@@ -118,12 +118,8 @@ def tune_optimize(config_path: str):
 
     click.echo("\nPhase 2: Full GA with best params")
     ga_cfg = cfg.ga
-    param_map = {"raw_w0": "alpha", "raw_w1": "beta", "raw_w2": "gamma", "raw_w3": "delta"}
-    ga_overrides = {}
-    for k, v in best_params.items():
-        target_key = param_map.get(k, k)
-        if hasattr(ga_cfg, target_key):
-            ga_overrides[target_key] = v
+    resolved = resolve_best_params(best_params)
+    ga_overrides = {k: v for k, v in resolved.items() if hasattr(ga_cfg, k)}
     if ga_overrides:
         ga_cfg = dc_replace(ga_cfg, **ga_overrides)
 

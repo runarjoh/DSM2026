@@ -90,16 +90,20 @@ data:
   upload_dir: "./uploads"
 
 ga:
-  # Fitness weights (must sum to < 1.0)
+  # Fitness weights (active weights must sum to < 1.0)
   alpha: 0.15        # type 1 error: connections across cluster boundaries
   beta: 0.05         # type 2 error: no connection within cluster
   gamma: 0.15        # type 3 error: consolidation potential across clusters
-  delta: 0.20        # cluster size imbalance penalty
+  delta: 0.20        # classic: size imbalance / mdl_pure+: type 4 consolidation overreach
+  epsilon: 0.10      # size imbalance weight (full, anti_singleton modes)
+  zeta: 0.10         # singleton penalty weight (anti_singleton mode)
   # Clustering
   max_clusters: 10
   target_clusters: 10
-  consolidation_mode: "once"   # "once" | "directional"
-  fitness_mode: "classic"      # "classic" | "mdl_pure"
+  consolidation_mode: "once"       # "once" | "directional"
+  fitness_mode: "mdl_pure"          # "classic" | "mdl_pure" | "full" | "anti_singleton"
+  matrix_preprocess: "normalize"   # "normalize" | "binary"
+  freq_threshold: 0               # filter out frequency values below this before preprocessing
   # GA operators
   population_size: 200
   n_generations: 400

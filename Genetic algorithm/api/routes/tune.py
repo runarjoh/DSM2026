@@ -12,7 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from api.models import RunStarted, TuneRequest
 from api.state import run_manager, sse_generator
 from services.config import AppConfig
-from services.optuna_runner import run_optuna
+from services.optuna_runner import resolve_best_params, run_optuna
 
 router = APIRouter(prefix="/api", tags=["tune"])
 _pool = ThreadPoolExecutor(max_workers=1)
@@ -70,11 +70,12 @@ def _run_tune(run_id: str, app_config: AppConfig):
             cancel_event=state.cancel_event,
         )
 
-        state.result = {"best_params": best_params, "best_value": study.best_value}
+        resolved = resolve_best_params(best_params)
+        state.result = {"best_params": resolved, "best_value": study.best_value}
         state.status = "done"
         state.queue.put({
             "type": "done",
-            "best_params": best_params,
+            "best_params": resolved,
             "fitness": study.best_value,
             "result_path": None,
         })

@@ -1,20 +1,30 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Heatmap from "./Heatmap";
 import DataTable from "./DataTable";
+import { preprocessMatrix } from "../utils/preprocess";
 
 interface Props {
   freqMatrix: number[][] | null;
   consolMatrix: number[][] | null;
   units: string[];
   groups?: number[] | null;
+  preprocessMode?: string;
+  freqThreshold?: number;
 }
 
-export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups = null }: Props) {
+export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups = null, preprocessMode = "normalize", freqThreshold = 0 }: Props) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
   const [which, setWhich] = useState<"freq" | "consol" | "combined">("combined");
+  const [showPreprocessed, setShowPreprocessed] = useState(false);
 
-  const matrix = which === "consol" ? consolMatrix : freqMatrix;
-  const binary = which === "consol";
+  const displayFreq = useMemo(() => {
+    if (!freqMatrix || !showPreprocessed) return freqMatrix;
+    return preprocessMatrix(freqMatrix, preprocessMode as "normalize" | "binary", freqThreshold);
+  }, [freqMatrix, showPreprocessed, preprocessMode, freqThreshold]);
+
+  const isConsol = which === "consol";
+  const matrix = isConsol ? consolMatrix : displayFreq;
+  const binary = isConsol || (showPreprocessed && preprocessMode === "binary");
 
   return (
     <section className="bg-white rounded-rc border p-6 shadow-rc" style={{ borderColor: "#EBEEF3" }}>
@@ -42,8 +52,26 @@ export default function MatrixPreview({ freqMatrix, consolMatrix, units, groups 
         </div>
       </div>
 
-      {/* Matrix selector tabs */}
-      <div className="flex gap-1 mb-4 ml-8">
+      {/* Row 1: Data values toggle */}
+      <div className="flex items-center gap-1 mb-2 ml-8">
+        <span className="text-xs text-gray-400 mr-1">Values:</span>
+        {(["raw", "preprocessed"] as const).map((v) => (
+          <button
+            key={v}
+            className="text-xs px-2 py-0.5 rounded border transition-colors duration-200"
+            style={(v === "preprocessed") === showPreprocessed
+              ? { borderColor: "#10b981", background: "#ecfdf5", color: "#059669" }
+              : { borderColor: "#E2E5EB", color: "#5A6178" }}
+            onClick={() => setShowPreprocessed(v === "preprocessed")}
+          >
+            {v === "raw" ? "Raw" : "Preprocessed"}
+          </button>
+        ))}
+      </div>
+
+      {/* Row 2: Matrix layer selector */}
+      <div className="flex items-center gap-1 mb-4 ml-8">
+        <span className="text-xs text-gray-400 mr-1">Layer:</span>
         <button
           className={`text-xs px-2 py-0.5 rounded border transition-colors duration-200`}
           style={which === "freq" ? { borderColor: "#3B4FE4", background: "#EEF0FD", color: "#3B4FE4" } : { borderColor: "#E2E5EB", color: "#5A6178" }}

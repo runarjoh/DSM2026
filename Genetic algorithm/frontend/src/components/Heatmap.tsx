@@ -112,7 +112,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
                   stroke="#f0f0f0"
                   strokeWidth={0.25}
                 />
-                {!isDiag && !binary && val > 0 && cellSize >= 18 && (
+                {!isDiag && val > 0 && cellSize >= 18 && (
                   <text
                     x={labelMargin + c * cellSize + cellSize / 2}
                     y={labelMargin + r * cellSize + cellSize / 2 + fontSize / 3}
@@ -120,7 +120,7 @@ export default function Heatmap({ matrix, units, binary = false, consolOverlay =
                     fill={textColor}
                     textAnchor="middle"
                   >
-                    {consolOverlay ? Math.round(val) : (val % 1 === 0 ? val : val.toFixed(1))}
+                    {val % 1 === 0 ? val : val.toFixed(1)}
                   </text>
                 )}
               </g>

@@ -16,7 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from dsm_ga import CancelledError, GAConfig, run_ga
+from dsm_ga import CancelledError, GAConfig, MODE_WEIGHTS, run_ga
 from services.config import AppConfig
 from services.optuna_runner import build_trial_config, run_optuna
 
@@ -68,11 +68,11 @@ def _save_robustness_chart(runs: list[dict], stats: dict, path: Path) -> None:
 
 
 def _save_sweep_chart(sweeps: dict[str, list[dict]], path: Path) -> None:
-    """Save a 2x2 grid of weight sweep line charts."""
-    weight_names = [w for w in ("alpha", "beta", "gamma", "delta") if w in sweeps]
+    """Save a grid of weight sweep line charts."""
+    weight_names = [w for w in sweeps]
     n = len(weight_names)
-    cols = min(n, 2)
-    rows = (n + 1) // 2
+    cols = min(n, 3)
+    rows = (n + cols - 1) // cols
 
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
     for idx, wname in enumerate(weight_names):
@@ -160,8 +160,13 @@ def run_importance(
 
     raw_importances: dict[str, float] = optuna.importance.get_param_importances(study)
 
-    # Rename raw_w0..3 to their actual parameter names
-    _param_names = {"raw_w0": "alpha", "raw_w1": "beta", "raw_w2": "gamma", "raw_w3": "delta"}
+    # Rename internal Optuna weight params to user-facing names
+    _param_names = {
+        "total_error_weight": "total_error_weight",
+        "pair_balance": "pair_balance (S1S2 vs S3S4)",
+        "s1_fraction": "s1_fraction (S1 vs S2)",
+        "s3_fraction": "s3_fraction (S3 vs S4)",
+    }
     importances = {_param_names.get(k, k): v for k, v in raw_importances.items()}
 
     # Logging ------------------------------------------------------------------
@@ -298,9 +303,10 @@ def run_weight_sweep(
 ) -> dict:
     """Sweep each fitness weight independently and record fitness & cluster count.
 
-    For each weight (*alpha*, *beta*, *gamma*, *delta*) the value is swept
-    from ``current / range_multiplier`` to ``current * range_multiplier``
+    For each fitness weight the value is swept from
+    ``current / range_multiplier`` to ``current * range_multiplier``
     (clamped to ``[0.001, 1.0]``), generating *n_steps* evenly spaced values.
+    The set of weights swept depends on the active fitness mode.
 
     Parameters
     ----------
@@ -313,7 +319,7 @@ def run_weight_sweep(
     dict with key ``sweeps`` mapping each weight name to a list of
     ``{"value": v, "fitness": f, "n_clusters": c}`` dicts.
     """
-    weight_names = ("alpha", "beta", "gamma", "delta")
+    weight_names = MODE_WEIGHTS.get(ga_config.fitness_mode, MODE_WEIGHTS["classic"])
     sweeps: dict[str, list[dict]] = {}
     total_steps = n_steps * len(weight_names)
     step_counter = 0

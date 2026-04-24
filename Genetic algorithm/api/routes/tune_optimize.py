@@ -15,7 +15,7 @@ from api.models import RunStarted, TuneOptimizeRequest
 from api.state import run_manager, sse_generator
 from dsm_ga import CancelledError, load_data, run_ga
 from services.config import AppConfig
-from services.optuna_runner import run_optuna
+from services.optuna_runner import resolve_best_params, run_optuna
 
 router = APIRouter(prefix="/api", tags=["tune-optimize"])
 _pool = ThreadPoolExecutor(max_workers=1)
@@ -73,14 +73,8 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
 
         # Merge best Optuna params into GA config
         ga_cfg = app_config.ga
-        param_map = {
-            "raw_w0": "alpha", "raw_w1": "beta", "raw_w2": "gamma", "raw_w3": "delta",
-        }
-        ga_overrides = {}
-        for k, v in best_params.items():
-            target_key = param_map.get(k, k)
-            if hasattr(ga_cfg, target_key):
-                ga_overrides[target_key] = v
+        resolved = resolve_best_params(best_params)
+        ga_overrides = {k: v for k, v in resolved.items() if hasattr(ga_cfg, k)}
         if ga_overrides:
             ga_cfg = dc_replace(ga_cfg, **ga_overrides)
 
@@ -137,7 +131,7 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
 
         state.result = {
             "fitness": fitness,
-            "best_params": best_params,
+            "best_params": resolved,
             "result_path": result_name,
             "figure_path": fig_name,
         }
@@ -145,7 +139,7 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
         state.queue.put({
             "type": "done",
             "fitness": fitness,
-            "best_params": best_params,
+            "best_params": resolved,
             "result_path": result_name,
             "figure_path": fig_name,
             "result_freq": dsm_reordered.values.tolist(),
