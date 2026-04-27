@@ -396,7 +396,7 @@ export default function Results({ status, phase, progressData, trialData, result
               <ResponsiveContainer width="100%" height={Math.max(200, Object.keys(sensitivityResult.importances).length * 35)}>
                 <BarChart data={Object.entries(sensitivityResult.importances).map(([k, v]) => ({name: k, importance: v})).sort((a, b) => b.importance - a.importance)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" domain={[0, 1]} />
+                  <XAxis type="number" domain={[0, (dataMax: number) => Math.ceil(dataMax * 2) / 2]} />
                   <YAxis type="category" dataKey="name" width={120} tick={{fontSize: 11}} />
                   <Tooltip />
                   <Bar dataKey="importance" fill="#3b82f6" />
@@ -423,7 +423,7 @@ export default function Results({ status, phase, progressData, trialData, result
                 <BarChart data={sensitivityResult.robustness.runs}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="run" label={{value: "Run", position: "insideBottom", offset: -5}} />
-                  <YAxis label={{value: "Fitness", angle: -90, position: "insideLeft"}} />
+                  <YAxis domain={[(dataMin: number) => Math.floor(dataMin / 50) * 50, (dataMax: number) => Math.ceil(dataMax * 1.01)]} label={{value: "Fitness", angle: -90, position: "insideLeft"}} />
                   <Tooltip />
                   <Bar dataKey="fitness" fill="#6366f1" />
                 </BarChart>
