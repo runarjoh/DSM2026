@@ -16,13 +16,47 @@ def cli():
 @click.option("--host", default="127.0.0.1", help="Bind address")
 @click.option("--port", default=8080, type=int, help="Port number")
 def serve(host: str, port: int):
-    """Start the web server."""
+    """Start the web server (serves pre-built frontend from frontend/dist/)."""
     import uvicorn
 
     from api.main import _config_path, get_app_config  # noqa: F401 — ensure config loads
 
     click.echo(f"Starting DSM GA server on http://{host}:{port}")
     uvicorn.run("api.main:app", host=host, port=port, reload=False)
+
+
+@cli.command()
+@click.option("--api-port", default=8099, type=int, help="Backend API port (must match vite.config.ts proxy)")
+def dev(api_port: int):
+    """Start backend + Vite dev server for development."""
+    import subprocess
+    import sys
+
+    from api.main import _config_path, get_app_config  # noqa: F401 — ensure config loads
+
+    frontend_dir = Path(__file__).parent.parent / "frontend"
+    if not (frontend_dir / "node_modules").is_dir():
+        click.echo("Installing frontend dependencies...")
+        subprocess.run(["npm", "install"], cwd=str(frontend_dir), check=True, shell=True)
+
+    click.echo(f"Starting API server on http://127.0.0.1:{api_port}")
+    click.echo("Starting Vite dev server on http://localhost:5173")
+    click.echo("Open http://localhost:5173 in your browser\n")
+
+    # Start Vite in background
+    vite = subprocess.Popen(
+        ["npm", "run", "dev"],
+        cwd=str(frontend_dir),
+        shell=True,
+    )
+
+    try:
+        import uvicorn
+
+        uvicorn.run("api.main:app", host="127.0.0.1", port=api_port, reload=True)
+    finally:
+        vite.terminate()
+        vite.wait()
 
 
 @cli.command(name="run")
@@ -62,10 +96,13 @@ def run_cmd(config_path: str):
         "Cluster": [f"Cluster {g}" for g in sorted_groups],
     })
 
+    metadata_df = pd.DataFrame({"fitness": [fitness]})
+
     with pd.ExcelWriter(str(result_path), engine="openpyxl") as writer:
         dsm_reordered.to_excel(writer, sheet_name="dsm_optimized")
         consol_reordered.to_excel(writer, sheet_name="dsm_consolidation")
         grouping_df.to_excel(writer, sheet_name="grouping")
+        metadata_df.to_excel(writer, sheet_name="metadata", index=False)
 
     click.echo(f"Exported to {result_path}")
 
@@ -147,10 +184,13 @@ def tune_optimize(config_path: str):
         "Cluster": [f"Cluster {g}" for g in sorted_groups],
     })
 
+    metadata_df = pd.DataFrame({"fitness": [fitness]})
+
     with pd.ExcelWriter(str(result_path), engine="openpyxl") as writer:
         dsm_reordered.to_excel(writer, sheet_name="dsm_optimized")
         consol_reordered.to_excel(writer, sheet_name="dsm_consolidation")
         grouping_df.to_excel(writer, sheet_name="grouping")
+        metadata_df.to_excel(writer, sheet_name="metadata", index=False)
 
     click.echo(f"Exported to {result_path}")
 

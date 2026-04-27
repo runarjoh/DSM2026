@@ -122,3 +122,178 @@ def plot_dsm_paper(
 
     plt.close(fig)
     return result_path
+
+
+# ---------------------------------------------------------------------------
+# Configuration summary image
+# ---------------------------------------------------------------------------
+
+def plot_config_summary(
+    config: dict,
+    title: str | None = None,
+    dpi: int = 200,
+    save_path: str | Path | None = None,
+) -> Path | None:
+    """Render the GA configuration as a clean table image."""
+
+    weight_keys = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]
+    cluster_keys = ["max_clusters", "target_clusters", "consolidation_mode",
+                    "fitness_mode", "matrix_preprocess", "freq_threshold"]
+    operator_keys = ["population_size", "n_generations", "cxpb", "mutpb", "tournsize"]
+
+    sections = [
+        ("Fitness Weights", [(k, config[k]) for k in weight_keys if k in config]),
+        ("Clustering", [(k, config[k]) for k in cluster_keys if k in config]),
+        ("GA Operators", [(k, config[k]) for k in operator_keys if k in config]),
+    ]
+
+    total_rows = sum(len(rows) + 1 for _, rows in sections)  # +1 for section headers
+    fig_h = max(2.5, 0.30 * total_rows + 0.8)
+    fig, ax = plt.subplots(figsize=(5, fig_h), dpi=dpi)
+    ax.axis("off")
+
+    y = 0.97
+    line_h = 0.88 / total_rows
+
+    if title:
+        ax.text(0.5, y, title, transform=ax.transAxes,
+                fontsize=10, fontweight="bold", ha="center", va="top",
+                fontfamily="sans-serif")
+        y -= line_h * 1.2
+
+    for section_name, rows in sections:
+        ax.text(0.05, y, section_name, transform=ax.transAxes,
+                fontsize=8.5, fontweight="bold", color="#3B4FE4",
+                va="top", fontfamily="sans-serif")
+        y -= line_h
+        for key, val in rows:
+            display_val = f"{val:.4f}" if isinstance(val, float) else str(val)
+            ax.text(0.08, y, key, transform=ax.transAxes,
+                    fontsize=7.5, color="#555555", va="top",
+                    fontfamily="sans-serif")
+            ax.text(0.55, y, display_val, transform=ax.transAxes,
+                    fontsize=7.5, color="#1A1D26", va="top",
+                    fontfamily="monospace", fontweight="bold")
+            y -= line_h
+        y -= line_h * 0.3
+
+    plt.tight_layout(pad=0.5)
+    result_path: Path | None = None
+    if save_path:
+        result_path = Path(save_path)
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(result_path), dpi=dpi, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return result_path
+
+
+# ---------------------------------------------------------------------------
+# Cluster statistics image
+# ---------------------------------------------------------------------------
+
+def plot_cluster_stats(
+    fitness: float,
+    n_clusters: int,
+    mdl: float,
+    components: dict[str, dict],
+    rates: dict[str, float],
+    title: str | None = None,
+    dpi: int = 200,
+    save_path: str | Path | None = None,
+) -> Path | None:
+    """Render cluster statistics (fitness decomposition + rates) as a table image."""
+
+    comp_labels = {
+        "mdl": "MDL", "freq_between": "Freq between", "freq_gap": "Freq gap",
+        "consol_between": "Consol between", "consol_gap": "Consol gap",
+        "size_imbalance": "Size imbalance", "singleton_penalty": "Singleton penalty",
+    }
+    rate_labels = {
+        "freqCapture": "Freq capture", "consolCapture": "Consol capture",
+        "bothCapture": "Both capture", "density": "Cluster density",
+        "alignment": "Cluster alignment", "noise": "Cluster noise",
+    }
+
+    n_comp = len(components)
+    n_rate = len(rates)
+    total_rows = 3 + n_comp + 2 + n_rate  # header + components + divider + rates
+    fig_h = max(3.0, 0.28 * total_rows + 1.2)
+    fig, ax = plt.subplots(figsize=(6, fig_h), dpi=dpi)
+    ax.axis("off")
+
+    y = 0.97
+    line_h = 0.85 / total_rows
+
+    # Title
+    heading = title or "Cluster Statistics"
+    ax.text(0.5, y, heading, transform=ax.transAxes,
+            fontsize=10, fontweight="bold", ha="center", va="top",
+            fontfamily="sans-serif")
+    y -= line_h * 1.3
+
+    # Summary line
+    summary = f"Clusters: {n_clusters}     MDL: {mdl:.1f}     Fitness: {fitness:.2f}"
+    ax.text(0.5, y, summary, transform=ax.transAxes,
+            fontsize=8, ha="center", va="top", color="#333333",
+            fontfamily="monospace")
+    y -= line_h * 1.5
+
+    # Fitness decomposition header
+    ax.text(0.05, y, "Component", transform=ax.transAxes,
+            fontsize=7.5, fontweight="bold", color="#8B92A5", va="top",
+            fontfamily="sans-serif")
+    ax.text(0.50, y, "Weight", transform=ax.transAxes,
+            fontsize=7.5, fontweight="bold", color="#8B92A5", va="top",
+            ha="right", fontfamily="sans-serif")
+    ax.text(0.95, y, "Value", transform=ax.transAxes,
+            fontsize=7.5, fontweight="bold", color="#8B92A5", va="top",
+            ha="right", fontfamily="sans-serif")
+    y -= line_h
+
+    for key, comp in components.items():
+        label = comp_labels.get(key, key)
+        weight = comp.get("weight", 0)
+        value = comp.get("value", 0)
+        pct = f"({value / fitness * 100:.0f}%)" if fitness > 0 else ""
+        ax.text(0.05, y, label, transform=ax.transAxes,
+                fontsize=7.5, color="#4A4F63", va="top", fontfamily="sans-serif")
+        ax.text(0.50, y, f"{weight * 100:.1f}%", transform=ax.transAxes,
+                fontsize=7.5, color="#8B92A5", va="top", ha="right",
+                fontfamily="monospace")
+        ax.text(0.95, y, f"{value:.1f} {pct}", transform=ax.transAxes,
+                fontsize=7.5, color="#1A1D26", fontweight="bold", va="top",
+                ha="right", fontfamily="monospace")
+        y -= line_h
+
+    # Divider
+    y -= line_h * 0.3
+    ax.plot([0.05, 0.95], [y + line_h * 0.15, y + line_h * 0.15],
+            color="#E2E5EB", linewidth=0.5, transform=ax.transAxes, clip_on=False)
+    y -= line_h * 0.3
+
+    # Rates header
+    ax.text(0.05, y, "Rate", transform=ax.transAxes,
+            fontsize=7.5, fontweight="bold", color="#8B92A5", va="top",
+            fontfamily="sans-serif")
+    ax.text(0.95, y, "Value", transform=ax.transAxes,
+            fontsize=7.5, fontweight="bold", color="#8B92A5", va="top",
+            ha="right", fontfamily="sans-serif")
+    y -= line_h
+
+    for key, value in rates.items():
+        label = rate_labels.get(key, key)
+        ax.text(0.05, y, label, transform=ax.transAxes,
+                fontsize=7.5, color="#4A4F63", va="top", fontfamily="sans-serif")
+        ax.text(0.95, y, f"{value:.1f}%", transform=ax.transAxes,
+                fontsize=7.5, color="#1A1D26", fontweight="bold", va="top",
+                ha="right", fontfamily="monospace")
+        y -= line_h
+
+    plt.tight_layout(pad=0.5)
+    result_path: Path | None = None
+    if save_path:
+        result_path = Path(save_path)
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(str(result_path), dpi=dpi, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return result_path

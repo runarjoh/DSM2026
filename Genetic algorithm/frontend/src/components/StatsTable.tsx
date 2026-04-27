@@ -118,11 +118,6 @@ export default function StatsTable({ stats, beforeStats, showCounts = false, fre
           >
             Cluster Statistics
           </span>
-          {freqThreshold > 0 && (
-            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded" style={{ ...mono, color: "#6366f1", background: "#eef2ff" }}>
-              freq &ge; {freqThreshold}
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace as dc_replace
@@ -17,6 +18,7 @@ from dsm_ga import CancelledError, load_data
 from services.config import AppConfig
 from services.sensitivity import run_importance, run_robustness, run_weight_sweep
 
+log = logging.getLogger("dsm_ga.sensitivity")
 router = APIRouter(tags=["sensitivity"])
 _pool = ThreadPoolExecutor(max_workers=1)
 
@@ -89,13 +91,16 @@ def _run_importance(run_id: str, app_config: AppConfig, req: ImportanceRequest):
         })
 
     except CancelledError:
+        log.info("Importance %s cancelled", run_id)
         state.status = "cancelled"
         state.queue.put({"type": "cancelled"})
     except Exception as exc:
         if "Cancelled" in str(exc):
+            log.info("Importance %s cancelled", run_id)
             state.status = "cancelled"
             state.queue.put({"type": "cancelled"})
         else:
+            log.error("Importance %s failed:\n%s", run_id, traceback.format_exc())
             state.status = "error"
             state.error = traceback.format_exc()
             state.queue.put({"type": "error", "message": traceback.format_exc()})
@@ -191,13 +196,16 @@ def _run_robustness(run_id: str, app_config: AppConfig, req: RobustnessRequest):
         state.queue.put(done_payload)
 
     except CancelledError:
+        log.info("Robustness %s cancelled", run_id)
         state.status = "cancelled"
         state.queue.put({"type": "cancelled"})
     except Exception as exc:
         if "Cancelled" in str(exc):
+            log.info("Robustness %s cancelled", run_id)
             state.status = "cancelled"
             state.queue.put({"type": "cancelled"})
         else:
+            log.error("Robustness %s failed:\n%s", run_id, traceback.format_exc())
             state.status = "error"
             state.error = traceback.format_exc()
             state.queue.put({"type": "error", "message": traceback.format_exc()})
@@ -274,10 +282,16 @@ def _run_sweep(run_id: str, app_config: AppConfig, req: SweepRequest):
                 "n_clusters": n_clusters,
             })
 
+        # Use reduced GA params for sweep runs (similar to tuning trials)
+        sweep_cfg = dc_replace(cfg,
+            population_size=min(cfg.population_size, 100),
+            n_generations=min(cfg.n_generations, 100),
+        )
+
         result = run_weight_sweep(
             dsm_freq,
             dsm_consol,
-            cfg,
+            sweep_cfg,
             n_steps=req.n_steps,
             range_multiplier=req.range_multiplier,
             callback=on_step,
@@ -294,13 +308,16 @@ def _run_sweep(run_id: str, app_config: AppConfig, req: SweepRequest):
         })
 
     except CancelledError:
+        log.info("Sweep %s cancelled", run_id)
         state.status = "cancelled"
         state.queue.put({"type": "cancelled"})
     except Exception as exc:
         if "Cancelled" in str(exc):
+            log.info("Sweep %s cancelled", run_id)
             state.status = "cancelled"
             state.queue.put({"type": "cancelled"})
         else:
+            log.error("Sweep %s failed:\n%s", run_id, traceback.format_exc())
             state.status = "error"
             state.error = traceback.format_exc()
             state.queue.put({"type": "error", "message": traceback.format_exc()})

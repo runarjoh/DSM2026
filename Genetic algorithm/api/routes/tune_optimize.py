@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace as dc_replace
@@ -17,6 +18,7 @@ from dsm_ga import CancelledError, load_data, run_ga
 from services.config import AppConfig
 from services.optuna_runner import resolve_best_params, run_optuna
 
+log = logging.getLogger("dsm_ga.tune_optimize")
 router = APIRouter(prefix="/api", tags=["tune-optimize"])
 _pool = ThreadPoolExecutor(max_workers=1)
 
@@ -114,12 +116,22 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
             "Cluster": [f"Cluster {g}" for g in sorted_groups],
         })
 
+        from dataclasses import asdict
+        config_dict = asdict(ga_cfg)
+        metadata_df = pd.DataFrame({
+            "parameter": ["fitness"] + list(config_dict.keys()),
+            "value": [fitness] + list(config_dict.values()),
+        })
+
         with pd.ExcelWriter(result_path, engine="openpyxl") as writer:
             dsm_reordered.to_excel(writer, sheet_name="dsm_optimized")
             consol_reordered.to_excel(writer, sheet_name="dsm_consolidation")
             grouping_df.to_excel(writer, sheet_name="grouping")
+            metadata_df.to_excel(writer, sheet_name="metadata", index=False)
 
-        from services.viz import plot_dsm_paper
+        from services.viz import plot_cluster_stats, plot_config_summary, plot_dsm_paper
+        from services.stats import compute_cluster_stats
+
         fig_name = f"tune_optimized_{run_id}.png"
         fig_path = str(Path(output_dir) / fig_name)
         plot_dsm_paper(
@@ -129,11 +141,33 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
             save_path=fig_path,
         )
 
+        config_fig_name = f"tune_optimized_{run_id}_config.png"
+        plot_config_summary(
+            config_dict,
+            title=f"GA Configuration — {result_name}",
+            save_path=str(Path(output_dir) / config_fig_name),
+        )
+
+        stats = compute_cluster_stats(
+            sorted_groups,
+            dsm_reordered.values, consol_reordered.values,
+            ga_cfg,
+        )
+        stats_fig_name = f"tune_optimized_{run_id}_stats.png"
+        plot_cluster_stats(
+            stats["fitness"], stats["n_clusters"], stats["mdl"],
+            stats["components"], stats["rates"],
+            title=f"Cluster Statistics — Fitness: {stats['fitness']:.4f}",
+            save_path=str(Path(output_dir) / stats_fig_name),
+        )
+
         state.result = {
             "fitness": fitness,
             "best_params": resolved,
             "result_path": result_name,
             "figure_path": fig_name,
+            "config_figure_path": config_fig_name,
+            "stats_figure_path": stats_fig_name,
         }
         state.status = "done"
         state.queue.put({
@@ -142,6 +176,8 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
             "best_params": resolved,
             "result_path": result_name,
             "figure_path": fig_name,
+            "config_figure_path": config_fig_name,
+            "stats_figure_path": stats_fig_name,
             "result_freq": dsm_reordered.values.tolist(),
             "result_consol": consol_reordered.values.tolist(),
             "result_units": sorted_units,
@@ -149,13 +185,16 @@ def _run_tune_optimize(run_id: str, app_config: AppConfig):
         })
 
     except CancelledError:
+        log.info("Tune-optimize %s cancelled", run_id)
         state.status = "cancelled"
         state.queue.put({"type": "cancelled"})
     except Exception as exc:
         if "Cancelled" in str(exc):
+            log.info("Tune-optimize %s cancelled", run_id)
             state.status = "cancelled"
             state.queue.put({"type": "cancelled"})
         else:
+            log.error("Tune-optimize %s failed:\n%s", run_id, traceback.format_exc())
             state.status = "error"
             state.error = traceback.format_exc()
             state.queue.put({"type": "error", "message": traceback.format_exc()})

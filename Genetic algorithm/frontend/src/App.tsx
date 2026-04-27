@@ -63,6 +63,8 @@ interface AppState {
     blankOutside?: number;
     resultPath?: string;
     figurePath?: string;
+    configFigurePath?: string;
+    statsFigurePath?: string;
     bestParams?: Record<string, number | string>;
     resultFreq?: number[][];
     resultConsol?: number[][];
@@ -205,6 +207,64 @@ export default function App() {
 
   const dataReady = s.freqMatrix !== null && s.consolMatrix !== null;
 
+  // Results list for loading previous runs
+  interface ResultEntry { filename: string; type: string; date: string; n_clusters: number | null; n_units: number | null; fitness: number | null; has_figure: boolean; display_name: string; sensitivity?: boolean }
+  const [resultsList, setResultsList] = useState<ResultEntry[]>([]);
+  const [activeResultFile, setActiveResultFile] = useState<string | null>(null);
+
+  async function loadResult(filename?: string) {
+    try {
+      const url = filename ? `/api/latest-result?filename=${encodeURIComponent(filename)}` : "/api/latest-result";
+      const resRes = await fetch(url);
+      if (!resRes.ok) return;
+      const lr = await resRes.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let fitData: any = {};
+      try {
+        const fitRes = await fetch("/api/compute-fitness", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clusters: lr.result_groups, ga: (() => {
+            const ga: Record<string, number | string> = {};
+            for (const [k, v] of Object.entries(s.gaParams)) { const num = Number(v); ga[k] = isNaN(num) ? v : num; }
+            return ga;
+          })() }),
+        });
+        if (fitRes.ok) fitData = await fitRes.json();
+      } catch { /* optional */ }
+      dispatch({
+        type: "done",
+        result: {
+          fitness: fitData.fitness,
+          mdl: fitData.mdl,
+          nClusters: fitData.n_clusters,
+          components: fitData.components,
+          freqWithin: fitData.freq_within,
+          freqOutside: fitData.freq_outside,
+          consolWithin: fitData.consol_within,
+          consolOutside: fitData.consol_outside,
+          bothWithin: fitData.both_within,
+          bothOutside: fitData.both_outside,
+          noFreqWithin: fitData.no_freq_within,
+          noFreqOutside: fitData.no_freq_outside,
+          noConsolWithin: fitData.no_consol_within,
+          noConsolOutside: fitData.no_consol_outside,
+          blankWithin: fitData.blank_within,
+          blankOutside: fitData.blank_outside,
+          resultPath: lr.result_path,
+          figurePath: lr.figure_path,
+          configFigurePath: lr.config_figure_path,
+          statsFigurePath: lr.stats_figure_path,
+          resultFreq: lr.result_freq,
+          resultConsol: lr.result_consol,
+          resultUnits: lr.result_units,
+          resultGroups: lr.result_groups,
+        },
+      });
+      setActiveResultFile(lr.filename);
+    } catch { /* ignore */ }
+  }
+
   // Auto-persist preprocessing params and fitness mode when they change
   const prevPreprocess = useRef("");
   useEffect(() => {
@@ -283,51 +343,15 @@ export default function App() {
             units: mat.units,
           });
         }
-        // Load latest result if available
+        // Load results list and latest result
         try {
-          const resRes = await fetch("/api/latest-result");
-          if (resRes.ok) {
-            const lr = await resRes.json();
-            // Compute fitness + counts for loaded result
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let fitData: any = {};
-            try {
-              const fitRes = await fetch("/api/compute-fitness", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ clusters: lr.result_groups }),
-              });
-              if (fitRes.ok) fitData = await fitRes.json();
-            } catch { /* fitness optional */ }
-            dispatch({
-              type: "done",
-              result: {
-                fitness: fitData.fitness,
-                mdl: fitData.mdl,
-                nClusters: fitData.n_clusters,
-                components: fitData.components,
-                freqWithin: fitData.freq_within,
-                freqOutside: fitData.freq_outside,
-                consolWithin: fitData.consol_within,
-                consolOutside: fitData.consol_outside,
-                bothWithin: fitData.both_within,
-                bothOutside: fitData.both_outside,
-                noFreqWithin: fitData.no_freq_within,
-                noFreqOutside: fitData.no_freq_outside,
-                noConsolWithin: fitData.no_consol_within,
-                noConsolOutside: fitData.no_consol_outside,
-                blankWithin: fitData.blank_within,
-                blankOutside: fitData.blank_outside,
-                resultPath: lr.result_path,
-                figurePath: lr.figure_path,
-                resultFreq: lr.result_freq,
-                resultConsol: lr.result_consol,
-                resultUnits: lr.result_units,
-                resultGroups: lr.result_groups,
-              },
-            });
+          const listRes = await fetch("/api/results-list");
+          if (listRes.ok) {
+            const list = await listRes.json();
+            setResultsList(list.results);
           }
-        } catch { /* no previous result — that's fine */ }
+        } catch { /* ignore */ }
+        await loadResult();
       } catch (e: unknown) {
         dispatch({ type: "dataError", message: e instanceof Error ? e.message : "Failed to load" });
       }
@@ -567,6 +591,8 @@ export default function App() {
             fitness: evt.fitness,
             resultPath: evt.result_path,
             figurePath: evt.figure_path,
+            configFigurePath: evt.config_figure_path,
+            statsFigurePath: evt.stats_figure_path,
             bestParams: evt.best_params,
             resultFreq: evt.result_freq,
             resultConsol: evt.result_consol,
@@ -601,6 +627,13 @@ export default function App() {
               body: JSON.stringify({ ga: gaUpdates }),
             }).catch(() => {});
           }
+          // Refresh results list so the new run appears and is marked active
+          if (evt.result_path) {
+            setActiveResultFile(evt.result_path);
+          }
+          fetch("/api/results-list").then(r => r.json()).then(list => {
+            setResultsList(list.results);
+          }).catch(() => {});
           es.close();
           break;
         }
@@ -788,6 +821,17 @@ export default function App() {
             groups: s.priorGroups,
             fitnessStats: previewStats,
           } : null}
+          resultsList={resultsList}
+          activeResultFile={activeResultFile}
+          onLoadResult={(filename) => loadResult(filename)}
+          onRenameResult={async (filename, name) => {
+            await fetch("/api/result-name", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filename, name }),
+            }).catch(() => {});
+            setResultsList((prev) => prev.map((r) => r.filename === filename ? { ...r, display_name: name } : r));
+          }}
         />
       </main>
     </div>

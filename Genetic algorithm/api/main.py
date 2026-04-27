@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import re
+import time
+import traceback
 from contextlib import asynccontextmanager
 from dataclasses import replace as dc_replace
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from api.logging_config import setup_logging
 from api.models import (
     ConfigSaveRequest,
     InitConfigRequest,
@@ -22,6 +26,11 @@ from api.models import (
 from api.routes import optimize, sensitivity, tune, tune_optimize, visualize
 from api.state import run_manager
 from services.config import AppConfig, config_to_dict, init_config, load_config
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+log = setup_logging()
 
 # ---------------------------------------------------------------------------
 # App-level config (loaded once at startup, can be refreshed)
@@ -60,6 +69,33 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="DSM GA", version="0.1.0", lifespan=lifespan)
+
+
+# ---------------------------------------------------------------------------
+# Request logging middleware
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    method = request.method
+    path = request.url.path
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = (time.perf_counter() - start) * 1000
+        log.error("%s %s -> 500 (%.0fms)\n%s", method, path, elapsed, traceback.format_exc())
+        return JSONResponse({"detail": "Internal server error"}, status_code=500)
+    elapsed = (time.perf_counter() - start) * 1000
+    status = response.status_code
+    if status >= 500:
+        log.error("%s %s -> %d (%.0fms)", method, path, status, elapsed)
+    elif status >= 400:
+        log.warning("%s %s -> %d (%.0fms)", method, path, status, elapsed)
+    else:
+        log.info("%s %s -> %d (%.0fms)", method, path, status, elapsed)
+    return response
+
 
 # Mount route modules
 app.include_router(optimize.router)
@@ -174,6 +210,18 @@ def compute_fitness(req: dict):
             ga_config = _dc_replace(ga_config, **{k: type(getattr(ga_config, k))(v)})
 
     import math
+
+    # Normalize cluster IDs to contiguous 0-based values so they fit
+    # within max_clusters (result files store raw GA cluster IDs which
+    # may exceed the current max_clusters setting).
+    unique_labels = sorted(set(clusters))
+    label_map = {lab: i for i, lab in enumerate(unique_labels)}
+    clusters = [label_map[c] for c in clusters]
+
+    # Ensure max_clusters is large enough for the actual cluster count
+    n_actual = len(unique_labels)
+    if ga_config.max_clusters < n_actual:
+        ga_config = _dc_replace(ga_config, max_clusters=n_actual)
 
     eval_fn = _make_eval_fn(dsm_freq.values, dsm_consol.values, ga_config)
     fitness = eval_fn(clusters)[0]
@@ -360,9 +408,201 @@ async def parse_grouping(file: UploadFile):
     return {"units": units, "clusters": clusters}
 
 
+@app.get("/api/results-list")
+def results_list():
+    """List all result files with metadata."""
+    import datetime
+    import json as _json
+
+    from openpyxl import load_workbook
+
+    cfg = get_app_config()
+    output_dir = Path(cfg.data.output_dir)
+    if not output_dir.is_dir():
+        return {"results": []}
+
+    # Load saved names
+    names_file = output_dir / "result_names.json"
+    saved_names: dict[str, str] = {}
+    if names_file.is_file():
+        try:
+            saved_names = _json.loads(names_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    # Lazy-load eval function for computing fitness on legacy files
+    _eval_fn = None
+
+    def _get_eval_fn():
+        nonlocal _eval_fn
+        if _eval_fn is None:
+            from dsm_ga import _make_eval_fn, load_data
+            dsm_freq, dsm_consol, _units, _ = load_data(cfg.data.freq_csv, cfg.data.consol_csv)
+            _eval_fn = (_make_eval_fn(dsm_freq.values, dsm_consol.values, cfg.ga), _units)
+        return _eval_fn
+
+    xlsx_files = sorted(output_dir.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+    items = []
+    names_dirty = False
+    for f in xlsx_files:
+        # Determine type from filename prefix
+        name = f.name
+        if name.startswith("tune_optimized_"):
+            result_type = "Tune + Optimize"
+        elif name.startswith("optimized_"):
+            result_type = "Optimize"
+        else:
+            result_type = "Unknown"
+
+        # Read Excel via openpyxl (much faster than pandas for metadata)
+        n_clusters = None
+        n_units = None
+        fitness = None
+        unit_names = None
+        cluster_labels = None
+        try:
+            wb = load_workbook(str(f), read_only=True, data_only=True)
+            if "grouping" in wb.sheetnames:
+                rows = list(wb["grouping"].iter_rows(min_row=2, values_only=True))
+                unit_names = [r[1] for r in rows]
+                cluster_labels = [r[2] for r in rows]
+                n_units = len(rows)
+                n_clusters = len(set(cluster_labels))
+            if "metadata" in wb.sheetnames:
+                meta_rows = list(wb["metadata"].iter_rows(min_row=2, values_only=True))
+                if meta_rows:
+                    # New format: (parameter, value) rows — find "fitness"
+                    if len(meta_rows[0]) >= 2 and meta_rows[0][0] == "fitness":
+                        fitness = round(float(meta_rows[0][1]), 1)
+                    # Old format: single-column with fitness in first cell
+                    elif meta_rows[0][0] is not None:
+                        try:
+                            fitness = round(float(meta_rows[0][0]), 1)
+                        except (ValueError, TypeError):
+                            pass
+            wb.close()
+        except Exception:
+            pass
+
+        # Compute fitness for legacy files and backfill metadata sheet
+        if fitness is None and unit_names is not None and cluster_labels is not None:
+            try:
+                eval_fn, data_units = _get_eval_fn()
+                unit_to_cluster = dict(zip(unit_names, cluster_labels))
+                labels_sorted = sorted(set(cluster_labels))
+                label_to_int = {lab: i for i, lab in enumerate(labels_sorted)}
+                clusters = [label_to_int[unit_to_cluster[u]] for u in data_units]
+                fitness = round(eval_fn(clusters)[0], 1)
+                # Write metadata sheet back so we don't recompute next time
+                try:
+                    wb_write = load_workbook(str(f))
+                    ws = wb_write.create_sheet("metadata")
+                    ws.append(["fitness"])
+                    ws.append([fitness])
+                    wb_write.save(str(f))
+                    wb_write.close()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        mtime = f.stat().st_mtime
+        dt = datetime.datetime.fromtimestamp(mtime)
+        date_str = dt.strftime("%Y-%m-%d %H:%M")
+
+        # Auto-generate default name if none saved
+        display_name = saved_names.get(name, "")
+        if not display_name and n_clusters is not None:
+            mode_short = {"mdl_pure": "mdl", "classic": "classic", "full": "full", "anti_singleton": "antisgl"}.get(cfg.ga.fitness_mode, cfg.ga.fitness_mode)
+            prep_short = "binary" if cfg.ga.matrix_preprocess == "binary" else "norm"
+            date_tag = dt.strftime("%b%d")
+            type_prefix = "tune_" if result_type == "Tune + Optimize" else ""
+            display_name = f"{type_prefix}{n_clusters}cl_{mode_short}_{prep_short}_{date_tag}"
+            saved_names[name] = display_name
+            names_dirty = True
+
+        items.append({
+            "filename": name,
+            "type": result_type,
+            "date": date_str,
+            "n_clusters": n_clusters,
+            "n_units": n_units,
+            "fitness": fitness,
+            "has_figure": (output_dir / (f.stem + ".png")).is_file(),
+            "display_name": display_name,
+        })
+
+    # Persist any auto-generated names
+    if names_dirty:
+        names_file.write_text(_json.dumps(saved_names, indent=2), encoding="utf-8")
+
+    # ---- Sensitivity runs (from sensitivity_runs/ directory) ----
+    sens_dir = Path("sensitivity_runs")
+    if sens_dir.is_dir():
+        type_map = {"importance": "Importance", "robustness": "Robustness", "sweep": "Sweep"}
+        for run_dir in sorted(sens_dir.iterdir(), key=lambda d: d.stat().st_mtime, reverse=True):
+            if not run_dir.is_dir() or not (run_dir / "summary.json").is_file():
+                continue
+            dir_name = run_dir.name
+            # Parse type from dir name (e.g. "2026-04-22T15-17-00_importance")
+            sens_type = "Sensitivity"
+            for key, label in type_map.items():
+                if key in dir_name:
+                    sens_type = label
+                    break
+
+            try:
+                summary = _json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+            mtime = run_dir.stat().st_mtime
+            dt = datetime.datetime.fromtimestamp(mtime)
+            date_str = dt.strftime("%Y-%m-%d %H:%M")
+
+            # Extract a fitness-like summary value depending on type
+            fitness_val = None
+            if sens_type == "Robustness":
+                fitness_val = round(summary.get("mean_fitness", 0), 1)
+            elif sens_type == "Importance":
+                # Show count of params analyzed
+                fitness_val = None
+
+            # Check for figure
+            has_figure = False
+            for ext in ("importance.png", "robustness.png", "sweep.png"):
+                if (run_dir / ext).is_file():
+                    has_figure = True
+                    break
+
+            display_name = saved_names.get(dir_name, "")
+            if not display_name:
+                date_tag = dt.strftime("%b%d")
+                display_name = f"{sens_type.lower()}_{date_tag}"
+                saved_names[dir_name] = display_name
+                names_dirty = True
+
+            items.append({
+                "filename": dir_name,
+                "type": sens_type,
+                "date": date_str,
+                "n_clusters": None,
+                "n_units": None,
+                "fitness": fitness_val,
+                "has_figure": has_figure,
+                "display_name": display_name,
+                "sensitivity": True,
+            })
+
+    if names_dirty:
+        names_file.write_text(_json.dumps(saved_names, indent=2), encoding="utf-8")
+
+    return {"results": items}
+
+
 @app.get("/api/latest-result")
-def latest_result():
-    """Return the most recent optimization result with matrix data for rendering."""
+def latest_result(filename: str | None = None):
+    """Return an optimization result with matrix data for rendering."""
     import pandas as pd
 
     cfg = get_app_config()
@@ -370,35 +610,77 @@ def latest_result():
     if not output_dir.is_dir():
         raise HTTPException(404, "No results directory")
 
-    # Find most recent xlsx result file
-    xlsx_files = sorted(output_dir.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-    if not xlsx_files:
-        raise HTTPException(404, "No results found")
+    if filename:
+        target = (output_dir / filename).resolve()
+        if not str(target).startswith(str(output_dir.resolve())):
+            raise HTTPException(403, "Access denied")
+        if not target.is_file():
+            raise HTTPException(404, "Result file not found")
+        result_file = target
+    else:
+        xlsx_files = sorted(output_dir.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if not xlsx_files:
+            raise HTTPException(404, "No results found")
+        result_file = xlsx_files[0]
 
-    latest = xlsx_files[0]
     try:
-        freq_df = pd.read_excel(str(latest), sheet_name="dsm_optimized", index_col=0)
-        consol_df = pd.read_excel(str(latest), sheet_name="dsm_consolidation", index_col=0)
-        grouping_df = pd.read_excel(str(latest), sheet_name="grouping")
+        freq_df = pd.read_excel(str(result_file), sheet_name="dsm_optimized", index_col=0)
+        consol_df = pd.read_excel(str(result_file), sheet_name="dsm_consolidation", index_col=0)
+        grouping_df = pd.read_excel(str(result_file), sheet_name="grouping")
     except Exception as e:
         raise HTTPException(400, f"Failed to read result file: {e}")
 
     units = freq_df.index.tolist()
     clusters = [int(str(c).replace("Cluster ", "")) for c in grouping_df["Cluster"]]
 
-    # Find matching figure
-    fig_name = latest.stem + ".png"
+    fig_name = result_file.stem + ".png"
     fig_path = fig_name if (output_dir / fig_name).is_file() else None
+    config_fig_name = result_file.stem + "_config.png"
+    config_fig_path = config_fig_name if (output_dir / config_fig_name).is_file() else None
+    stats_fig_name = result_file.stem + "_stats.png"
+    stats_fig_path = stats_fig_name if (output_dir / stats_fig_name).is_file() else None
 
     return {
         "result_freq": freq_df.values.tolist(),
         "result_consol": consol_df.values.tolist(),
         "result_units": units,
         "result_groups": clusters,
-        "result_path": latest.name,
+        "result_path": result_file.name,
         "figure_path": fig_path,
-        "filename": latest.name,
+        "config_figure_path": config_fig_path,
+        "stats_figure_path": stats_fig_path,
+        "filename": result_file.name,
     }
+
+
+@app.post("/api/result-name")
+def set_result_name(req: dict):
+    """Set a display name for a result file."""
+    import json as _json
+
+    cfg = get_app_config()
+    output_dir = Path(cfg.data.output_dir)
+    names_file = output_dir / "result_names.json"
+
+    filename = req.get("filename")
+    name = req.get("name", "")
+    if not filename:
+        raise HTTPException(400, "filename is required")
+
+    names: dict[str, str] = {}
+    if names_file.is_file():
+        try:
+            names = _json.loads(names_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    if name:
+        names[filename] = name
+    else:
+        names.pop(filename, None)
+
+    names_file.write_text(_json.dumps(names, indent=2), encoding="utf-8")
+    return {"status": "saved"}
 
 
 @app.post("/api/config/save")

@@ -40,6 +40,8 @@ interface ResultData {
   blankOutside?: number;
   resultPath?: string;
   figurePath?: string;
+  configFigurePath?: string;
+  statsFigurePath?: string;
   bestParams?: Record<string, number | string>;
   resultFreq?: number[][];
   resultConsol?: number[][];
@@ -70,6 +72,18 @@ interface PreviewData {
   fitnessStats: FitnessStats | null;
 }
 
+interface ResultEntry {
+  filename: string;
+  type: string;
+  date: string;
+  n_clusters: number | null;
+  n_units: number | null;
+  fitness: number | null;
+  has_figure: boolean;
+  display_name: string;
+  sensitivity?: boolean;
+}
+
 interface Props {
   status: "idle" | "running" | "done" | "error" | "cancelled";
   phase: "idle" | "tune" | "optimize";
@@ -83,9 +97,13 @@ interface Props {
   preprocessMode?: string;
   freqThreshold?: number;
   preview?: PreviewData | null;
+  resultsList?: ResultEntry[];
+  activeResultFile?: string | null;
+  onLoadResult?: (filename: string) => void;
+  onRenameResult?: (filename: string, name: string) => void;
 }
 
-export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult, preprocessMode = "normalize", freqThreshold = 0, preview = null }: Props) {
+export default function Results({ status, phase, progressData, trialData, result, error, sensitivityType, sensitivityProgress = [], sensitivityResult, preprocessMode = "normalize", freqThreshold = 0, preview = null, resultsList = [], activeResultFile = null, onLoadResult, onRenameResult }: Props) {
   const [resultView, setResultView] = useState<"freq" | "consol" | "combined">("combined");
   const [showPreprocessed, setShowPreprocessed] = useState(true);
   const [showBefore, setShowBefore] = useState(false);
@@ -322,7 +340,7 @@ export default function Results({ status, phase, progressData, trialData, result
           )}
 
           {/* Downloads */}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             {result.resultPath && (
               <a
                 href={`/api/results/${result.resultPath}`}
@@ -338,7 +356,25 @@ export default function Results({ status, phase, progressData, trialData, result
                 download
                 className="text-sm text-blue-600 hover:underline"
               >
-                Download Figure
+                Download DSM Figure
+              </a>
+            )}
+            {result.statsFigurePath && (
+              <a
+                href={`/api/results/${result.statsFigurePath}`}
+                download
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Download Statistics
+              </a>
+            )}
+            {result.configFigurePath && (
+              <a
+                href={`/api/results/${result.configFigurePath}`}
+                download
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Download Config
               </a>
             )}
           </div>
@@ -427,6 +463,99 @@ export default function Results({ status, phase, progressData, trialData, result
           {sensitivityResult.logPath && (
             <div className="text-xs text-gray-400 mt-2">Results saved to: {sensitivityResult.logPath}</div>
           )}
+        </div>
+      )}
+
+      {/* Previous results selector */}
+      {resultsList.length > 0 && (
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="text-xs font-semibold mb-2" style={{ color: "#5A6178" }}>Previous Results</div>
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: "#E2E5EB", maxHeight: 200, overflowY: "auto" }}>
+            <table className="w-full text-xs" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
+              <thead>
+                <tr style={{ background: "#F3F4F8", position: "sticky", top: 0 }}>
+                  <th className="text-left font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Name</th>
+                  <th className="text-left font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Date</th>
+                  <th className="text-left font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Type</th>
+                  <th className="text-right font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Fitness</th>
+                  <th className="text-right font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Clusters</th>
+                  <th className="text-right font-medium px-3 py-1.5" style={{ color: "#8B92A5" }}>Units</th>
+                  <th className="px-3 py-1.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {resultsList.map((r, i) => {
+                  const isActive = r.filename === activeResultFile;
+                  return (
+                    <tr
+                      key={r.filename}
+                      style={{
+                        background: isActive ? "#EEF0FD" : i % 2 === 0 ? "#FFFFFF" : "#FAFBFC",
+                        borderBottom: i < resultsList.length - 1 ? "1px solid #F0F1F4" : undefined,
+                      }}
+                    >
+                      <td className="px-3 py-1">
+                        <input
+                          key={r.display_name}
+                          className="text-xs w-full bg-transparent border-0 border-b outline-none py-0.5 px-0"
+                          style={{ borderColor: r.display_name ? "transparent" : "#E2E5EB", color: "#4A4F63", minWidth: 80 }}
+                          placeholder="Untitled"
+                          defaultValue={r.display_name}
+                          onFocus={(e) => { e.target.style.borderColor = "#3B4FE4"; }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = e.target.value ? "transparent" : "#E2E5EB";
+                            if (e.target.value !== r.display_name) onRenameResult?.(r.filename, e.target.value);
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        />
+                      </td>
+                      <td className="px-3 py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color: "#4A4F63" }}>
+                        {r.date}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                          style={
+                            r.type === "Tune + Optimize" ? { color: "#7c3aed", background: "#f5f3ff" }
+                            : r.type === "Importance" ? { color: "#0d9488", background: "#f0fdfa" }
+                            : r.type === "Robustness" ? { color: "#c2410c", background: "#fff7ed" }
+                            : r.type === "Sweep" ? { color: "#4338ca", background: "#eef2ff" }
+                            : { color: "#2563eb", background: "#eff6ff" }
+                          }
+                        >
+                          {r.type}
+                        </span>
+                      </td>
+                      <td className="text-right px-3 py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color: "#4A4F63" }}>
+                        {r.fitness != null ? r.fitness.toFixed(1) : "—"}
+                      </td>
+                      <td className="text-right px-3 py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color: "#4A4F63" }}>
+                        {r.n_clusters ?? "—"}
+                      </td>
+                      <td className="text-right px-3 py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color: "#4A4F63" }}>
+                        {r.n_units ?? "—"}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        {r.sensitivity ? (
+                          <span className="text-[10px]" style={{ color: "#8B92A5" }}></span>
+                        ) : isActive ? (
+                          <span className="text-[10px] font-medium" style={{ color: "#3B4FE4" }}>Active</span>
+                        ) : (
+                          <button
+                            className="text-[10px] px-2 py-0.5 rounded border transition-colors duration-200"
+                            style={{ borderColor: "#E2E5EB", color: "#5A6178" }}
+                            onClick={() => onLoadResult?.(r.filename)}
+                          >
+                            Load
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

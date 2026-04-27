@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace as dc_replace
@@ -14,6 +15,7 @@ from api.state import run_manager, sse_generator
 from services.config import AppConfig
 from services.optuna_runner import resolve_best_params, run_optuna
 
+log = logging.getLogger("dsm_ga.tune")
 router = APIRouter(prefix="/api", tags=["tune"])
 _pool = ThreadPoolExecutor(max_workers=1)
 
@@ -82,9 +84,11 @@ def _run_tune(run_id: str, app_config: AppConfig):
 
     except Exception as exc:
         if "Cancelled" in str(exc):
+            log.info("Tune %s cancelled", run_id)
             state.status = "cancelled"
             state.queue.put({"type": "cancelled"})
         else:
+            log.error("Tune %s failed:\n%s", run_id, traceback.format_exc())
             state.status = "error"
             state.error = traceback.format_exc()
             state.queue.put({"type": "error", "message": traceback.format_exc()})

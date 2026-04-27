@@ -2,6 +2,17 @@
 
 A web application and CLI for running Design Structure Matrix (DSM) optimization using a genetic algorithm (DEAP), with Optuna hyperparameter tuning and publication-quality visualization.
 
+## TLDR: Quick Start (Development)
+
+```bash
+uv venv --python 3.11 && uv sync   # one-time setup
+uv run dsm-ga dev                   # starts API (:8099) + Vite (:5173) together
+```
+
+Open http://localhost:5173 — hot-reload frontend, API proxied automatically.
+
+---
+
 ## Prerequisites
 
 ### Install uv
@@ -34,24 +45,45 @@ uv venv --python 3.11
 uv sync
 ```
 
-## Running the web application
+## Serving the pre-built frontend
+
+If you don't need to modify the frontend, you can serve the pre-built bundle directly:
 
 ```bash
 uv run dsm-ga serve
 ```
 
-This starts the server at http://127.0.0.1:8080. Open this URL in your browser.
+This starts the server at http://127.0.0.1:8080 serving the frontend from `frontend/dist/`.
+
+Options:
+```bash
+uv run dsm-ga serve --host 0.0.0.0 --port 8080
+```
+
+To rebuild the frontend bundle:
+```bash
+cd frontend && npm install && npm run build
+```
+
+## Frontend development
+
+For active frontend work, use the dev command which starts both the backend API and Vite dev server with hot reload:
+
+```bash
+uv run dsm-ga dev
+```
+
+This starts:
+- Backend API on http://127.0.0.1:8099 (with auto-reload)
+- Vite dev server on http://localhost:5173 (proxies `/api` to the backend)
+
+Open http://localhost:5173 in your browser.
 
 The web UI provides four actions:
 - **Optimize** — run the GA with configurable parameters and watch live fitness progress
 - **Tune** — run Optuna hyperparameter tuning with live trial-by-trial results
 - **Tune & Optimize** — run tuning first, then a full GA with the best parameters
 - **Visualize** — generate a publication-quality DSM figure
-
-Options:
-```bash
-uv run dsm-ga serve --host 0.0.0.0 --port 8080
-```
 
 ## CLI usage
 
@@ -111,27 +143,6 @@ optuna:
 ```
 
 The web UI loads these values as defaults and lets you override them per-run.
-
-## Frontend development
-
-If you want to modify the frontend:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-This starts the Vite dev server on http://localhost:5173 with API requests proxied to http://localhost:8080. Run `uv run dsm-ga serve` in a separate terminal.
-
-To rebuild for production:
-
-```bash
-cd frontend
-npm run build
-```
-
-The built files go to `frontend/dist/` and are served automatically by the FastAPI backend.
 
 ## Running tests
 
