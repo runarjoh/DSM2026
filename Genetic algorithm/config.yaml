@@ -11,7 +11,7 @@ ga:
   delta: 0.220667
   epsilon: 0.1
   zeta: 0.1
-  max_clusters: 30
+  max_clusters: 6
   target_clusters: 10
   consolidation_mode: once
   fitness_mode: mdl_pure

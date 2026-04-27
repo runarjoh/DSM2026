@@ -191,7 +191,7 @@ export default function Results({ status, phase, progressData, trialData, result
             </div>
             <div className="text-sm font-mono ml-auto">
               <span className="text-gray-400">Best fitness: </span>
-              <span className="text-red-600 font-bold">{Math.min(...progressData.map(p => p.min)).toFixed(4)}</span>
+              <span className="text-green-600 font-bold">{Math.min(...progressData.map(p => p.min)).toFixed(4)}</span>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={250}>
@@ -202,8 +202,8 @@ export default function Results({ status, phase, progressData, trialData, result
               <Tooltip />
               <Legend />
               <Line type="monotone" dataKey="avg" stroke="#000000" dot={false} name="Average" />
-              <Line type="monotone" dataKey="min" stroke="#ef4444" dot={false} name="Minimum" />
-              <Line type="monotone" dataKey="max" stroke="#22c55e" dot={false} name="Maximum" />
+              <Line type="monotone" dataKey="min" stroke="#22c55e" dot={false} name="Minimum" />
+              <Line type="monotone" dataKey="max" stroke="#3b82f6" dot={false} name="Maximum" />
             </LineChart>
           </ResponsiveContainer>
         </div>
