@@ -446,7 +446,7 @@ export default function Results({ status, phase, progressData, trialData, result
                       <LineChart data={data}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="value" tickFormatter={(v: number) => v.toFixed(2)} tick={{fontSize: 10}} />
-                        <YAxis yAxisId="fitness" label={{value: "Fitness", angle: -90, position: "insideLeft"}} tick={{fontSize: 10}} />
+                        <YAxis yAxisId="fitness" domain={[(dataMin: number) => Math.floor(dataMin / 50) * 50, (dataMax: number) => Math.ceil(dataMax / 50) * 50]} label={{value: "Fitness", angle: -90, position: "insideLeft"}} tick={{fontSize: 10}} />
                         <YAxis yAxisId="clusters" orientation="right" label={{value: "Clusters", angle: 90, position: "insideRight"}} tick={{fontSize: 10}} domain={[0, "auto"]} />
                         <Tooltip formatter={(v: number, name: string) => [name === "nClusters" ? v : v.toFixed(1), name === "nClusters" ? "Clusters" : "Fitness"]} />
                         <Legend />

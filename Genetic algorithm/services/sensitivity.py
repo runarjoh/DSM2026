@@ -74,6 +74,18 @@ def _save_sweep_chart(sweeps: dict[str, list[dict]], path: Path) -> None:
     cols = min(n, 3)
     rows = (n + cols - 1) // cols
 
+    # Compute global fitness range across all sweeps for consistent y-axis
+    all_fit = [d["fitness"] for entries in sweeps.values() for d in entries]
+    if all_fit:
+        global_min = np.floor(min(all_fit) / 50) * 50  # round down to nearest 50
+        global_max = np.ceil(max(all_fit) / 50) * 50    # round up to nearest 50
+        # Ensure at least some range
+        if global_max - global_min < 10:
+            global_min -= 25
+            global_max += 25
+    else:
+        global_min, global_max = 0, 1
+
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
     for idx, wname in enumerate(weight_names):
         ax = axes[idx // cols][idx % cols]
@@ -85,6 +97,7 @@ def _save_sweep_chart(sweeps: dict[str, list[dict]], path: Path) -> None:
         ax.plot(values, fitnesses, "o-", color="#3b82f6", linewidth=1.5, markersize=4, label="Fitness")
         ax.set_xlabel(wname)
         ax.set_ylabel("Fitness", color="#3b82f6")
+        ax.set_ylim(global_min, global_max)
         ax.tick_params(axis="y", labelcolor="#3b82f6")
 
         ax2 = ax.twinx()
