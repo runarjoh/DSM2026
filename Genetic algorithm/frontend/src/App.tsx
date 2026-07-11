@@ -78,7 +78,10 @@ interface AppState {
   sensitivityProgress: { label: string; run: number; total: number; fitness: number }[];
   sensitivityResult: {
     importances?: Record<string, number>;
+    importanceStd?: Record<string, number>;
     source?: string;
+    seed?: number | null;
+    nRepeats?: number;
     robustness?: { runs: {run: number; fitness: number}[]; meanFitness: number; stdFitness: number; minFitness: number; maxFitness: number; ariMean: number };
     sweeps?: Record<string, {value: number; fitness: number; nClusters: number}[]>;
     logPath?: string;
@@ -112,6 +115,7 @@ const defaultGaParams: Record<string, string> = {
   max_clusters: "10", target_clusters: "10", consolidation_mode: "once", fitness_mode: "mdl_pure", matrix_preprocess: "normalize", freq_threshold: "0",
   population_size: "200", n_generations: "400",
   cxpb: "0.5", mutpb: "0.1", tournsize: "5",
+  seed: "42",
 };
 
 const defaultOptunaParams: Record<string, string> = {
@@ -291,7 +295,8 @@ export default function App() {
         const cfg = await cfgRes.json();
         if (cfg.ga) {
           for (const [k, v] of Object.entries(cfg.ga)) {
-            if (k in defaultGaParams) dispatch({ type: "setGaParam", field: k, value: String(v) });
+            // Skip null/undefined (e.g. seed: null) so the UI default is kept.
+            if (k in defaultGaParams && v != null) dispatch({ type: "setGaParam", field: k, value: String(v) });
           }
         }
         if (cfg.optuna) {
@@ -509,6 +514,9 @@ export default function App() {
     ga.consolidation_mode = s.gaParams.consolidation_mode;
     ga.fitness_mode = mode;
     ga.matrix_preprocess = s.gaParams.matrix_preprocess || "normalize";
+    // Global seed — only send when set (blank = stochastic). Reaches every run
+    // and analysis via the ga overrides.
+    if (s.gaParams.seed != null && s.gaParams.seed !== "") ga.seed = parseInt(s.gaParams.seed);
     return ga;
   }
 
@@ -702,7 +710,10 @@ export default function App() {
             sensitivityType: type,
             result: {
               importances: evt.importances,
+              importanceStd: evt.std,
               source: evt.source,
+              seed: evt.seed,
+              nRepeats: evt.n_repeats,
               robustness: evt.mean_fitness != null ? {
                 runs: evt.runs || [],
                 meanFitness: evt.mean_fitness,
@@ -762,6 +773,8 @@ export default function App() {
           onReplace={handleReplace}
           onGroupingUpload={handleGroupingUpload}
           onGroupingClear={handleGroupingClear}
+          seed={s.gaParams.seed ?? ""}
+          onSeedChange={(v) => dispatch({ type: "setGaParam", field: "seed", value: v })}
           disabled={s.status === "running"}
         />
 

@@ -14,6 +14,8 @@ interface Props {
   onReplace: (which: "freq" | "consol", file: File) => void;
   onGroupingUpload: (file: File) => void;
   onGroupingClear: () => void;
+  seed: string;
+  onSeedChange: (value: string) => void;
   disabled: boolean;
 }
 
@@ -126,7 +128,7 @@ function GroupingCard({
   );
 }
 
-export default function DataImport({ freqFile, consolFile, groupingFile, onReplace, onGroupingUpload, onGroupingClear, disabled }: Props) {
+export default function DataImport({ freqFile, consolFile, groupingFile, onReplace, onGroupingUpload, onGroupingClear, seed, onSeedChange, disabled }: Props) {
   return (
     <section className="bg-white rounded-rc border p-6 shadow-rc" style={{ borderColor: "#EBEEF3" }}>
       <div className="flex items-center gap-2 mb-4">
@@ -157,6 +159,31 @@ export default function DataImport({ freqFile, consolFile, groupingFile, onRepla
           onClear={onGroupingClear}
           disabled={disabled}
         />
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t" style={{ borderColor: "#EBEEF3" }}>
+        <span className="text-sm font-medium" style={{ color: "#1A1D26" }}>Seed</span>
+        <div className="flex gap-1">
+          <input
+            type="number"
+            placeholder="random"
+            className="w-28 rounded border-gray-300 border px-2 py-1 text-sm"
+            value={seed}
+            onChange={(e) => onSeedChange(e.target.value)}
+            disabled={disabled}
+          />
+          <button
+            type="button"
+            title="Pick a new random seed"
+            className="shrink-0 rounded border border-gray-300 px-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+            onClick={() => onSeedChange(String(Math.floor(Math.random() * 100000)))}
+            disabled={disabled}
+          >
+            🎲
+          </button>
+        </div>
+        <span className="text-xs" style={{ color: "#8B92A5" }}>
+          Applies to every run and analysis. Blank = random each run.
+        </span>
       </div>
     </section>
   );

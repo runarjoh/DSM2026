@@ -25,19 +25,35 @@ from services.optuna_runner import build_trial_config, run_optuna
 # Chart helpers
 # ---------------------------------------------------------------------------
 
-def _save_importance_chart(importances: dict[str, float], path: Path) -> None:
-    """Save a horizontal bar chart of parameter importances."""
+def _save_importance_chart(
+    importances: dict[str, float],
+    path: Path,
+    std: dict[str, float] | None = None,
+    subtitle: str | None = None,
+) -> None:
+    """Save a horizontal bar chart of parameter importances.
+
+    If *std* is provided (from averaging over repeated studies), horizontal
+    error bars are drawn to show the run-to-run spread.
+    """
     sorted_items = sorted(importances.items(), key=lambda x: x[1])
     names = [k for k, _ in sorted_items]
     values = [v for _, v in sorted_items]
+    errors = [std.get(k, 0.0) for k, _ in sorted_items] if std else None
 
     fig, ax = plt.subplots(figsize=(8, max(3, len(names) * 0.5)))
-    ax.barh(names, values, color="#3b82f6")
+    ax.barh(names, values, color="#3b82f6",
+            xerr=errors, error_kw={"ecolor": "#1e3a8a", "capsize": 4} if errors else {})
     ax.set_xlim(0, 1)
     ax.set_xlabel("Importance (fANOVA)")
-    ax.set_title("Parameter Importance")
+    title = "Parameter Importance"
+    if subtitle:
+        ax.set_title(f"{title}\n{subtitle}", fontsize=11)
+    else:
+        ax.set_title(title)
     for i, v in enumerate(values):
-        ax.text(v + 0.01, i, f"{v:.3f}", va="center", fontsize=8)
+        label = f"{v:.3f} ± {errors[i]:.3f}" if errors else f"{v:.3f}"
+        ax.text(v + (errors[i] if errors else 0) + 0.01, i, label, va="center", fontsize=8)
     plt.tight_layout()
     fig.savefig(str(path), dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -120,6 +136,31 @@ def _save_sweep_chart(sweeps: dict[str, list[dict]], path: Path) -> None:
 # 1. Parameter importance (fANOVA via Optuna)
 # ---------------------------------------------------------------------------
 
+# Map internal Optuna weight params to user-facing names
+_PARAM_NAMES = {
+    "total_error_weight": "total_error_weight",
+    "pair_balance": "pair_balance (S1S2 vs S3S4)",
+    "s1_fraction": "s1_fraction (S1 vs S2)",
+    "s3_fraction": "s3_fraction (S3 vs S4)",
+}
+
+
+def _study_importances(study: optuna.Study, evaluator_seed: int | None = None) -> dict[str, float]:
+    """fANOVA importances for one study, with user-facing param names.
+
+    The default fANOVA evaluator fits a random forest with its own RNG, so its
+    output varies run-to-run even for an identical study. Passing
+    *evaluator_seed* fixes that forest so the importances are reproducible.
+    """
+    evaluator = (
+        optuna.importance.FanovaImportanceEvaluator(seed=evaluator_seed)
+        if evaluator_seed is not None
+        else None
+    )
+    raw = optuna.importance.get_param_importances(study, evaluator=evaluator)
+    return {_PARAM_NAMES.get(k, k): v for k, v in raw.items()}
+
+
 def run_importance(
     dsm_freq,
     dsm_consol,
@@ -130,12 +171,24 @@ def run_importance(
     callback: Callable[[int, float, float], None] | None = None,
     cancel_event: threading.Event | None = None,
     log_dir: str | None = None,
-) -> tuple[dict[str, float], str, optuna.Study]:
+    n_repeats: int = 1,
+    seed: int | None = None,
+) -> tuple[dict[str, float], str, optuna.Study, dict[str, float]]:
     """Compute fANOVA parameter importances.
 
-    If *existing_study* already has >= *n_trials* completed trials the
-    importances are derived directly from it (``source="reused"``).
-    Otherwise a fresh Optuna study is executed.
+    fANOVA importances computed from a single Optuna study are *not* stable:
+    the sampler is stochastic, so two runs of the same configuration can rank
+    the parameters differently. To get a reproducible, publishable result,
+    pass ``seed`` (fixes the sampler) and/or ``n_repeats > 1`` (runs that many
+    independent seeded studies and averages the importances, reporting the
+    run-to-run standard deviation).
+
+    Behaviour:
+      * ``n_repeats > 1`` or ``seed is not None`` → run fresh **seeded** studies
+        (``existing_study`` is ignored) and average. ``source`` reports the
+        number of repeats and the base seed.
+      * otherwise → legacy behaviour: reuse *existing_study* if it has enough
+        completed trials, else run one fresh (unseeded) study.
 
     Parameters
     ----------
@@ -144,43 +197,63 @@ def run_importance(
 
     Returns
     -------
-    (importances, source, study)
-        *importances* maps parameter names to fANOVA scores,
-        *source* is ``"reused"`` or ``"new_study"``.
+    (importances, source, study, std)
+        *importances* maps parameter names to mean fANOVA scores,
+        *std* maps the same names to the run-to-run standard deviation
+        (all zeros when a single study is used).
     """
-    # Decide whether to reuse --------------------------------------------------
-    reuse = (
-        existing_study is not None
-        and len([t for t in existing_study.trials
-                 if t.state == optuna.trial.TrialState.COMPLETE]) >= n_trials
-    )
+    # Fall back to the app-level seed so importance honours the global seed.
+    if seed is None:
+        seed = app_config.ga.seed
+    reproducible = n_repeats > 1 or seed is not None
 
-    if reuse:
-        study = existing_study
-        source = "reused"
-    else:
-        # Build a temporary AppConfig with the requested trial count / group
+    per_repeat: list[dict[str, float]] = []
+    study: optuna.Study | None = None
+
+    if reproducible:
         cfg = dc_replace(app_config.optuna, n_trials=n_trials, param_group=param_group)
         tmp_app = AppConfig(data=app_config.data, ga=app_config.ga, optuna=cfg)
-        _, study = run_optuna(
-            dsm_freq,
-            dsm_consol,
-            tmp_app,
-            trial_callback=callback,
-            cancel_event=cancel_event,
+        base_seed = seed if seed is not None else 0
+        for i in range(max(1, n_repeats)):
+            if cancel_event is not None and cancel_event.is_set():
+                raise CancelledError("Importance analysis cancelled by user")
+            _, study = run_optuna(
+                dsm_freq,
+                dsm_consol,
+                tmp_app,
+                trial_callback=callback,
+                cancel_event=cancel_event,
+                seed=base_seed + i,
+            )
+            per_repeat.append(_study_importances(study, evaluator_seed=base_seed + i))
+        source = f"averaged over {max(1, n_repeats)} seeded studies (base seed {base_seed})"
+    else:
+        # Legacy single-study path (may reuse a prior tuning study) ------------
+        reuse = (
+            existing_study is not None
+            and len([t for t in existing_study.trials
+                     if t.state == optuna.trial.TrialState.COMPLETE]) >= n_trials
         )
-        source = "new_study"
+        if reuse:
+            study = existing_study
+            source = "reused"
+        else:
+            cfg = dc_replace(app_config.optuna, n_trials=n_trials, param_group=param_group)
+            tmp_app = AppConfig(data=app_config.data, ga=app_config.ga, optuna=cfg)
+            _, study = run_optuna(
+                dsm_freq,
+                dsm_consol,
+                tmp_app,
+                trial_callback=callback,
+                cancel_event=cancel_event,
+            )
+            source = "new_study"
+        per_repeat.append(_study_importances(study))
 
-    raw_importances: dict[str, float] = optuna.importance.get_param_importances(study)
-
-    # Rename internal Optuna weight params to user-facing names
-    _param_names = {
-        "total_error_weight": "total_error_weight",
-        "pair_balance": "pair_balance (S1S2 vs S3S4)",
-        "s1_fraction": "s1_fraction (S1 vs S2)",
-        "s3_fraction": "s3_fraction (S3 vs S4)",
-    }
-    importances = {_param_names.get(k, k): v for k, v in raw_importances.items()}
+    # Aggregate mean / std across repeats (union of all param names) -----------
+    all_keys = sorted({k for rep in per_repeat for k in rep})
+    importances = {k: float(np.mean([rep.get(k, 0.0) for rep in per_repeat])) for k in all_keys}
+    std = {k: float(np.std([rep.get(k, 0.0) for rep in per_repeat])) for k in all_keys}
 
     # Logging ------------------------------------------------------------------
     if log_dir is not None:
@@ -191,6 +264,8 @@ def run_importance(
                 {
                     "n_trials": n_trials,
                     "param_group": param_group,
+                    "n_repeats": n_repeats,
+                    "seed": seed,
                     "source": source,
                     "ga": asdict(app_config.ga),
                 },
@@ -198,10 +273,23 @@ def run_importance(
                 indent=2,
             )
         with open(p / "summary.json", "w", encoding="utf-8") as f:
-            json.dump({"importances": importances, "source": source}, f, indent=2)
-        _save_importance_chart(importances, p / "importance.png")
+            json.dump(
+                {
+                    "importances": importances,
+                    "std": std,
+                    "source": source,
+                    "n_repeats": n_repeats,
+                    "seed": seed,
+                    "per_repeat": per_repeat,
+                },
+                f,
+                indent=2,
+            )
+        subtitle = source if reproducible else None
+        _save_importance_chart(importances, p / "importance.png",
+                               std=std if reproducible else None, subtitle=subtitle)
 
-    return importances, source, study
+    return importances, source, study, std
 
 
 # ---------------------------------------------------------------------------
@@ -230,13 +318,19 @@ def run_robustness(
     ``min_fitness``, ``max_fitness``, ``ari_matrix``, ``ari_mean``.
     """
     runs: list[dict] = []
+    # When a global seed is set, give each repeat a distinct child seed so the
+    # analysis is reproducible yet still measures genuine run-to-run spread. With
+    # no seed, every run is independently random (the original behaviour).
+    base_seed = ga_config.seed
 
     for i in range(n_repeats):
         if cancel_event is not None and cancel_event.is_set():
             raise CancelledError("Robustness analysis cancelled by user")
 
+        run_seed = None if base_seed is None else base_seed + i
         best, logbook, fitness = run_ga(
             dsm_freq, dsm_consol, ga_config, verbose=False, cancel_event=cancel_event,
+            seed=run_seed,
         )
 
         logbook_records = [

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar,
+  BarChart, Bar, ErrorBar,
 } from "recharts";
 import Heatmap from "./Heatmap";
 import StatsTable, { type FitnessStats } from "./StatsTable";
@@ -51,7 +51,10 @@ interface ResultData {
 
 interface SensitivityResult {
   importances?: Record<string, number>;
+  importanceStd?: Record<string, number>;
   source?: string;
+  seed?: number | null;
+  nRepeats?: number;
   robustness?: { runs: {run: number; fitness: number}[]; meanFitness: number; stdFitness: number; minFitness: number; maxFitness: number; ariMean: number };
   sweeps?: Record<string, {value: number; fitness: number; nClusters: number}[]>;
   logPath?: string;
@@ -388,18 +391,29 @@ export default function Results({ status, phase, progressData, trialData, result
           {sensitivityType === "importance" && sensitivityResult.importances && (
             <div className="mb-4">
               <div className="text-xs font-semibold text-gray-500 mb-1">
-                Parameter Importance (fANOVA) — {sensitivityResult.source === "reused" ? "from previous tuning" : "from dedicated study"}
+                Parameter Importance (fANOVA) — {sensitivityResult.source ?? "from dedicated study"}
               </div>
+              {sensitivityResult.seed != null && (
+                <div className="inline-flex items-center gap-2 mb-2 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-mono">
+                  <span>seed = {sensitivityResult.seed}</span>
+                  {sensitivityResult.nRepeats != null && <span>· {sensitivityResult.nRepeats} repeats</span>}
+                </div>
+              )}
               <p className="text-xs text-gray-400 mb-2">
                 Shows which parameters have the most influence on fitness outcome. Higher scores mean changes to that parameter produce larger fitness differences.
+                {sensitivityResult.importanceStd && Object.values(sensitivityResult.importanceStd).some((v) => v > 0)
+                  ? " Error bars show the run-to-run standard deviation across the repeated seeded studies."
+                  : ""}
               </p>
               <ResponsiveContainer width="100%" height={Math.max(200, Object.keys(sensitivityResult.importances).length * 35)}>
-                <BarChart data={Object.entries(sensitivityResult.importances).map(([k, v]) => ({name: k, importance: v})).sort((a, b) => b.importance - a.importance)} layout="vertical">
+                <BarChart data={Object.entries(sensitivityResult.importances).map(([k, v]) => ({name: k, importance: v, std: sensitivityResult.importanceStd?.[k] ?? 0})).sort((a, b) => b.importance - a.importance)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" domain={[0, (dataMax: number) => Math.ceil(dataMax * 2) / 2]} />
                   <YAxis type="category" dataKey="name" width={120} tick={{fontSize: 11}} />
                   <Tooltip />
-                  <Bar dataKey="importance" fill="#3b82f6" />
+                  <Bar dataKey="importance" fill="#3b82f6">
+                    <ErrorBar dataKey="std" width={4} strokeWidth={1} stroke="#1e3a8a" direction="x" />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>

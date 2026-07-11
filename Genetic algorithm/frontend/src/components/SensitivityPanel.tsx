@@ -13,6 +13,7 @@ export default function SensitivityPanel({ status, dataReady, onRun, onCancel }:
   // Importance fields
   const [impTrials, setImpTrials] = useState("30");
   const [impParamGroup, setImpParamGroup] = useState("all");
+  const [impRepeats, setImpRepeats] = useState("20");
 
   // Robustness fields
   const [robRepeats, setRobRepeats] = useState("10");
@@ -41,7 +42,10 @@ export default function SensitivityPanel({ status, dataReady, onRun, onCancel }:
         {openSection === "importance" && (
           <div className="px-4 pb-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 mt-2 mb-3">
-              Computes fANOVA importance scores. Will reuse previous tuning study if available.
+              Computes fANOVA importance scores. With repeats &gt; 1 and a seed set (in
+              the run configuration above), the analysis runs that many independent
+              seeded studies and reports the mean importance ± run-to-run spread — a
+              single study is not reproducible.
             </p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <label className="block">
@@ -69,10 +73,20 @@ export default function SensitivityPanel({ status, dataReady, onRun, onCancel }:
                   <option value="all">all</option>
                 </select>
               </label>
+              <label className="block">
+                <span className="text-xs text-gray-500">Repeats (averaging)</span>
+                <input
+                  type="number"
+                  className="mt-1 block w-full rounded border-gray-300 border px-2 py-1 text-sm"
+                  value={impRepeats}
+                  onChange={(e) => setImpRepeats(e.target.value)}
+                  disabled={disabled}
+                />
+              </label>
             </div>
             <button
               className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-              onClick={() => onRun("importance", { n_trials: parseInt(impTrials), param_group: impParamGroup })}
+              onClick={() => onRun("importance", { n_trials: parseInt(impTrials), param_group: impParamGroup, n_repeats: parseInt(impRepeats) })}
               disabled={disabled}
             >
               {status === "running" ? "Running..." : "Run Importance Analysis"}

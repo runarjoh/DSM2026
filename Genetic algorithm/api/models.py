@@ -29,6 +29,7 @@ class GAOverrides(BaseModel):
     cxpb: float | None = None
     mutpb: float | None = None
     tournsize: int | None = None
+    seed: int | None = None
 
 
 class OptimizeRequest(BaseModel):
@@ -102,6 +103,9 @@ class InitConfigRequest(BaseModel):
 class ImportanceRequest(BaseModel):
     n_trials: int = 30
     param_group: str = "all"
+    n_repeats: int = 1
+    # The seed is taken from the (global) GA config via ga.seed; the importance
+    # analysis derives distinct child seeds per repeat from it.
     ga: GAOverrides | None = None
     freq_csv: str | None = None
     consol_csv: str | None = None

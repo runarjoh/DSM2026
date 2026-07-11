@@ -207,7 +207,12 @@ def compute_fitness(req: dict):
     ga_config = cfg.ga
     for k, v in ga_overrides.items():
         if hasattr(ga_config, k):
-            ga_config = _dc_replace(ga_config, **{k: type(getattr(ga_config, k))(v)})
+            current = getattr(ga_config, k)
+            # Coerce to the current field's type. When the current value is None
+            # (e.g. an unset `seed`), its type can't be used as a constructor, so
+            # pass the value through as-is (or None to clear it).
+            coerced = v if (v is None or current is None) else type(current)(v)
+            ga_config = _dc_replace(ga_config, **{k: coerced})
 
     import math
 

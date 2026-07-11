@@ -132,6 +132,7 @@ def run_optuna(
     app_config: AppConfig,
     trial_callback: Callable[[int, float, float], None] | None = None,
     cancel_event: threading.Event | None = None,
+    seed: int | None = None,
 ) -> tuple[dict, optuna.Study]:
     """Run an Optuna study and return (best_params, study).
 
@@ -139,10 +140,18 @@ def run_optuna(
     ----------
     trial_callback : called after each trial with (trial_number, value, best_so_far)
     cancel_event   : checked between trials; raises OptunaError when set
+    seed           : if set, seeds the TPE sampler so the study is reproducible.
+                     Leave ``None`` for tuning (exploratory); pass a fixed value
+                     for the importance analysis so fANOVA scores are stable.
     """
     cfg = app_config.optuna
     base_ga = app_config.ga
     param_group = cfg.param_group
+
+    # Fall back to the app-level seed so tuning is reproducible whenever a global
+    # seed is set, without the caller having to pass it explicitly.
+    if seed is None:
+        seed = base_ga.seed
 
     if param_group not in VALID_GROUPS:
         raise ValueError(f"param_group must be one of {VALID_GROUPS}, got {param_group!r}")
@@ -157,7 +166,10 @@ def run_optuna(
             n_generations=cfg.trial_generations,
             population_size=cfg.trial_population,
         )
-        _, _, fitness = run_ga(dsm_freq, dsm_consol, trial_cfg, verbose=False)
+        # When the study is seeded, seed each trial's GA deterministically too, so
+        # the whole importance pipeline (sampling + evaluation) is reproducible.
+        ga_seed = None if seed is None else seed * 100_003 + trial.number
+        _, _, fitness = run_ga(dsm_freq, dsm_consol, trial_cfg, verbose=False, seed=ga_seed)
 
         if trial_callback is not None:
             best_so_far = min(
@@ -168,7 +180,8 @@ def run_optuna(
 
         return fitness
 
-    study = optuna.create_study(direction="minimize")
+    sampler = optuna.samplers.TPESampler(seed=seed) if seed is not None else None
+    study = optuna.create_study(direction="minimize", sampler=sampler)
     study.optimize(objective, n_trials=cfg.n_trials, n_jobs=cfg.n_jobs)
 
     return study.best_params, study

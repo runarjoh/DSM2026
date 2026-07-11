@@ -62,6 +62,10 @@ class GAConfig:
     cxpb:            float = 0.5
     mutpb:           float = 0.1
     tournsize:       int   = 5
+    # Reproducibility — when set, seeds the RNG so runs are deterministic.
+    # Leave None for stochastic behaviour. Analyses that intentionally sample
+    # multiple runs (robustness, importance) derive distinct child seeds from it.
+    seed:            int | None = None
 
     def active_weights(self) -> tuple[str, ...]:
         """Return weight parameter names used by the current fitness_mode."""
@@ -259,6 +263,7 @@ def run_ga(
     verbose: bool = False,
     progress_callback: Callable[[int, float, float, float], None] | None = None,
     cancel_event: threading.Event | None = None,
+    seed: int | None = None,
 ):
     """Run the DEAP genetic algorithm.
 
@@ -282,6 +287,15 @@ def run_ga(
     ------
     CancelledError  — if cancel_event is set during the run
     """
+    # Seed the RNG so the run is reproducible. DEAP's operators (init, crossover,
+    # mutation, tournament selection) all draw from the global `random` state, so
+    # seeding it makes an otherwise-stochastic run deterministic. An explicit
+    # `seed` argument (used to derive distinct child seeds for robustness /
+    # importance) overrides the config-level `seed`.
+    effective_seed = seed if seed is not None else config.seed
+    if effective_seed is not None:
+        random.seed(effective_seed)
+
     n = len(dsm_freq.columns)
     dsm_matrix    = dsm_freq.values.tolist()
     consol_matrix = dsm_consol.values.tolist()

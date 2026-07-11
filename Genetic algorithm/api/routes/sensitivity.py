@@ -64,7 +64,7 @@ def _run_importance(run_id: str, app_config: AppConfig, req: ImportanceRequest):
                 "best": best_so_far,
             })
 
-        importances, source, study = run_importance(
+        importances, source, study, std = run_importance(
             dsm_freq,
             dsm_consol,
             app_cfg,
@@ -74,21 +74,22 @@ def _run_importance(run_id: str, app_config: AppConfig, req: ImportanceRequest):
             callback=on_trial,
             cancel_event=state.cancel_event,
             log_dir=log_dir,
+            n_repeats=req.n_repeats,
+            seed=cfg.seed,  # global seed from the GA config (ga.seed)
         )
         _last_study = study
 
-        state.result = {
+        result_payload = {
             "importances": importances,
+            "std": std,
             "source": source,
+            "seed": cfg.seed,
+            "n_repeats": req.n_repeats,
             "log_path": log_dir,
         }
+        state.result = result_payload
         state.status = "done"
-        state.queue.put({
-            "type": "done",
-            "importances": importances,
-            "source": source,
-            "log_path": log_dir,
-        })
+        state.queue.put({"type": "done", **result_payload})
 
     except CancelledError:
         log.info("Importance %s cancelled", run_id)
